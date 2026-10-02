@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PitProde — Pruebas</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 700px; margin: 24px auto; padding: 0 16px; }
+    li { margin: 6px 0; }
+    .ok { color: #137333; }
+    .falla { color: #b00020; font-weight: bold; }
+  </style>
+</head>
+<body>
+  <h1>Pruebas de puntuación</h1>
+  <p id="resumen"></p>
+  <ul id="resultados"></ul>
+
+  <script src="storage.js"></script>
+  <script src="scoring.js"></script>
+  <script>
+    'use strict';
+    // Mini sistema de pruebas: cada prueba lanza un error si algo no da lo esperado.
+    const resultados = [];
+    function prueba(nombre, funcion) {
+      try { funcion(); resultados.push({ nombre, ok: true }); }
+      catch (error) { resultados.push({ nombre, ok: false, detalle: error.message }); }
+    }
+    function esperar(obtenido, esperado) {
+      if (JSON.stringify(obtenido) !== JSON.stringify(esperado)) {
+        throw new Error(`esperaba ${JSON.stringify(esperado)} y dio ${JSON.stringify(obtenido)}`);
+      }
+    }
+
+    const podio = (p1, p2, p3, pole) => ({ p1, p2, p3, pole });
+
+    prueba('Caso del TP: resultado VER-NOR-LEC pole NOR vs pronóstico NOR-VER-LEC pole NOR = 12', () => {
+      esperar(calcularPuntos(podio('NOR', 'VER', 'LEC', 'NOR'), podio('VER', 'NOR', 'LEC', 'NOR')), 12);
+    });
+    prueba('Pronóstico perfecto = 18', () => {
+      esperar(calcularPuntos(podio('VER', 'NOR', 'LEC', 'VER'), podio('VER', 'NOR', 'LEC', 'VER')), 18);
+    });
+    prueba('Sin ningún acierto = 0', () => {
+      esperar(calcularPuntos(podio('HAM', 'RUS', 'ALO', 'SAI'), podio('VER', 'NOR', 'LEC', 'PIA')), 0);
+    });
+    prueba('Solo pole acertada = 3', () => {
+      esperar(calcularPuntos(podio('HAM', 'RUS', 'ALO', 'PIA'), podio('VER', 'NOR', 'LEC', 'PIA')), 3);
+    });
+    prueba('Piloto en el podio pero en otra posición = 2', () => {
+      esperar(calcularPuntos(podio('LEC', 'HAM', 'RUS', 'SAI'), podio('VER', 'NOR', 'LEC', 'PIA')), 2);
+    });
+    prueba('Detecta pilotos repetidos en el podio', () => {
+      esperar(hayPilotosRepetidos(podio('VER', 'VER', 'LEC')), true);
+      esperar(hayPilotosRepetidos(podio('VER', 'NOR', 'LEC')), false);
+    });
+
+    // Datos de ejemplo para la tabla y los estados.
+    const jugadores = [{ id: 'j1', nombre: 'Ana' }, { id: 'j2', nombre: 'Beto' }, { id: 'j3', nombre: 'Caro' }];
+    const gps = [{ id: 'g1', resultado: podio('VER', 'NOR', 'LEC', 'VER') }];
+    const pron = (jugadorId, p1, p2, p3, pole) => ({ jugadorId, gpId: 'g1', ...podio(p1, p2, p3, pole) });
+
+    prueba('Tabla: ordena por puntos', () => {
+      const tabla = calcularTabla(jugadores, [pron('j1', 'VER', 'NOR', 'LEC', 'VER'), pron('j2', 'HAM', 'RUS', 'ALO', 'SAI')], gps);
+      esperar(tabla.map((f) => f.jugador.nombre), ['Ana', 'Beto', 'Caro']);
+    });
+    prueba('Tabla: empate en puntos se desempata por aciertos exactos', () => {
+      // Ana: 1 exacto (5) + 2 en podio (2+2) = 9, Beto: 3 en podio (6) + pole (3) = 9, pero 0 exactos.
+      const tabla = calcularTabla(jugadores, [
+        pron('j1', 'VER', 'LEC', 'NOR', 'PIA'),
+        pron('j2', 'NOR', 'LEC', 'VER', 'VER'),
+      ], gps);
+      esperar(tabla[0].puntos === tabla[1].puntos, true);
+      esperar(tabla.map((f) => f.jugador.nombre).slice(0, 2), ['Ana', 'Beto']);
+      esperar(tabla.map((f) => f.posicion), [1, 2, 3]);
+    });
+    prueba('Tabla: empate total comparte posición', () => {
+      const tabla = calcularTabla(jugadores, [], gps);
+      esperar(tabla.map((f) => f.posicion), [1, 1, 1]);
+    });
+
+    prueba('Estados del GP: próximo, cerrado y finalizado', () => {
+      const ahora = new Date('2026-06-01T12:00:00Z');
+      esperar(estadoGP({ fechaLargada: '2026-06-01T13:00:00Z', resultado: null }, ahora), 'proximo');
+      esperar(estadoGP({ fechaLargada: '2026-06-01T11:00:00Z', resultado: null }, ahora), 'cerrado');
+      esperar(estadoGP({ fechaLargada: '2026-06-01T11:00:00Z', resultado: podio('a', 'b', 'c', 'a') }, ahora), 'finalizado');
+    });
+
+    const datosBase = crearDatosIniciales();
+    datosBase.jugadores.push({ id: 'j1', nombre: 'Ana', apodo: '', color: '#ff0000', fechaAlta: '2026-01-01T00:00:00Z' });
+    const ids = ['piloto-ver', 'piloto-nor', 'piloto-lec'];
+    const gpFuturo = { id: 'gp-futuro', nombre: 'X', circuito: 'Y', fechaLargada: '2030-01-01T10:00:00Z', resultado: null };
+    const gpPasado = { id: 'gp-pasado', nombre: 'X', circuito: 'Y', fechaLargada: '2020-01-01T10:00:00Z', resultado: null };
+    datosBase.grandesPremios.push(gpFuturo, gpPasado);
+
+    prueba('Pronóstico: no deja repetir piloto en P1 y P2', () => {
+      const errores = validarPronostico({ jugadorId: 'j1', gpId: 'gp-futuro', p1: ids[0], p2: ids[0], p3: ids[2], pole: ids[1] }, datosBase);
+      esperar(errores.length, 1);
+    });
+    prueba('Pronóstico: bloqueado después de la largada', () => {
+      const errores = validarPronostico({ jugadorId: 'j1', gpId: 'gp-pasado', p1: ids[0], p2: ids[1], p3: ids[2], pole: ids[1] }, datosBase);
+      esperar(errores.length, 1);
+    });
+    prueba('Pronóstico válido antes de la largada', () => {
+      esperar(validarPronostico({ jugadorId: 'j1', gpId: 'gp-futuro', p1: ids[0], p2: ids[1], p3: ids[2], pole: ids[1] }, datosBase), []);
+    });
+    prueba('Resultado: no se puede cargar antes de la largada', () => {
+      const errores = validarResultado({ p1: ids[0], p2: ids[1], p3: ids[2], pole: ids[1] }, gpFuturo, datosBase.pilotos);
+      esperar(errores.length, 1);
+    });
+
+    prueba('Exportar y volver a importar deja todo igual', () => {
+      const original = JSON.parse(JSON.stringify(datosBase));
+      original.pronosticos.push({ id: 'x1', jugadorId: 'j1', gpId: 'gp-futuro', p1: ids[0], p2: ids[1], p3: ids[2], pole: ids[1], fechaCarga: '2026-01-02T00:00:00Z', puntos: null, favorito: true });
+      const resultado = importarDatos(exportarDatos(original));
+      esperar(resultado.ok, true);
+      esperar(resultado.datos, original);
+    });
+    prueba('Importar un JSON roto avisa y no devuelve datos', () => {
+      const resultado = importarDatos('{"jugadores": [');
+      esperar(resultado.ok, false);
+    });
+    prueba('Importar un JSON con pronóstico duplicado o piloto inexistente falla', () => {
+      const malo = JSON.parse(exportarDatos(datosBase));
+      const base = { jugadorId: 'j1', gpId: 'gp-futuro', p1: ids[0], p2: ids[1], p3: ids[2], pole: ids[1], fechaCarga: '2026-01-02T00:00:00Z' };
+      malo.pronosticos = [{ id: 'a', ...base }, { id: 'b', ...base }];
+      esperar(importarDatos(JSON.stringify(malo)).ok, false);
+      malo.pronosticos = [{ id: 'a', ...base, p1: 'no-existe' }];
+      esperar(importarDatos(JSON.stringify(malo)).ok, false);
+    });
+
+    // Se muestran los resultados en pantalla.
+    const lista = document.getElementById('resultados');
+    resultados.forEach((r) => {
+      const item = document.createElement('li');
+      item.className = r.ok ? 'ok' : 'falla';
+      item.textContent = `${r.ok ? '✔' : '✘'} ${r.nombre}${r.ok ? '' : ' — ' + r.detalle}`;
+      lista.append(item);
+    });
+    const falladas = resultados.filter((r) => !r.ok).length;
+    document.getElementById('resumen').textContent = falladas
+      ? `${falladas} de ${resultados.length} pruebas fallaron.`
+      : `Las ${resultados.length} pruebas pasaron.`;
+  </script>
+</body>
+</html>

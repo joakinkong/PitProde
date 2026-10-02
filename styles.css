@@ -1,0 +1,234 @@
+/* styles.css — diseño mobile first de PitProde */
+
+:root {
+  --fondo: #15151e;
+  --superficie: #1f1f2b;
+  --superficie-2: #2a2a3a;
+  --borde: #45455a;
+  --texto: #f5f5f7;
+  --texto-suave: #c4c4d2;
+  --acento: #e10600;
+  --acento-oscuro: #b00500;
+  --ok: #2ecc71;
+  --aviso: #f5b942;
+  --error-fondo: #4a1519;
+  --error-borde: #ff6b6b;
+  --radio: 10px;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--fondo);
+  color: var(--texto);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-size: 16px;
+  line-height: 1.45;
+}
+
+/* ---------- Cabecera y navegación ---------- */
+.cabecera {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: #0d0d14;
+  border-bottom: 3px solid var(--acento);
+}
+
+.logo {
+  margin: 0;
+  padding: 10px 16px 0;
+  font-size: 1.4rem;
+  font-style: italic;
+  letter-spacing: 0.5px;
+}
+.logo span { color: var(--acento); }
+
+.navegacion {
+  display: flex;
+  gap: 4px;
+  padding: 6px 12px 0;
+  overflow-x: auto;
+}
+
+.pestana {
+  flex: 0 0 auto;
+  min-height: 44px;
+  padding: 0 14px;
+  background: none;
+  border: none;
+  border-bottom: 3px solid transparent;
+  color: var(--texto-suave);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.pestana[aria-current="page"] { color: var(--texto); border-bottom-color: var(--acento); }
+
+/* ---------- Estructura general ---------- */
+.vista { max-width: 900px; margin: 0 auto; padding: 16px; }
+
+.vista h2 { margin: 0 0 12px; font-size: 1.2rem; }
+
+.tarjeta {
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
+  padding: 14px;
+  margin-bottom: 12px;
+}
+
+.nota, .vacio { color: var(--texto-suave); font-size: 0.9rem; }
+.vacio { text-align: center; padding: 20px 0; }
+
+/* ---------- Avisos y errores ---------- */
+.mensajes { position: sticky; top: 90px; z-index: 9; padding: 0 16px; max-width: 900px; margin: 0 auto; }
+
+.aviso {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 10px 14px;
+  border-radius: var(--radio);
+  font-weight: 600;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+}
+.aviso-ok { background: #123d26; border: 1px solid var(--ok); }
+.aviso-error { background: var(--error-fondo); border: 1px solid var(--error-borde); }
+
+.btn-cerrar {
+  min-width: 44px;
+  min-height: 44px;
+  background: none;
+  border: none;
+  color: inherit;
+  font-size: 1.4rem;
+  cursor: pointer;
+}
+
+.errores {
+  background: var(--error-fondo);
+  border: 1px solid var(--error-borde);
+  border-radius: var(--radio);
+  padding: 8px 12px;
+  margin: 10px 0;
+}
+.errores p { margin: 4px 0; }
+
+.banner-persistencia {
+  margin: 0;
+  padding: 10px 16px;
+  background: #5a4310;
+  text-align: center;
+}
+
+/* ---------- Formularios ---------- */
+.campo { display: block; margin-bottom: 12px; }
+.campo > span { display: block; margin-bottom: 4px; font-weight: 600; font-size: 0.9rem; }
+
+input[type="text"], input[type="number"], input[type="datetime-local"], select {
+  width: 100%;
+  min-height: 48px;
+  padding: 8px 12px;
+  background: var(--superficie-2);
+  border: 1px solid var(--borde);
+  border-radius: 8px;
+  color: var(--texto);
+  font: inherit;
+}
+input[type="color"] { width: 64px; height: 48px; padding: 2px; background: var(--superficie-2); border: 1px solid var(--borde); border-radius: 8px; }
+.campo-check { display: flex; align-items: center; gap: 10px; min-height: 48px; }
+.campo-check input { width: 24px; height: 24px; }
+.campo-check span { margin: 0; }
+
+input:focus-visible, select:focus-visible, button:focus-visible {
+  outline: 3px solid var(--aviso);
+  outline-offset: 2px;
+}
+
+.grilla-campos { display: grid; grid-template-columns: 1fr; gap: 0 12px; }
+
+/* ---------- Botones ---------- */
+.acciones { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+
+.btn {
+  min-height: 48px;
+  padding: 0 18px;
+  background: var(--superficie-2);
+  border: 1px solid var(--borde);
+  border-radius: 8px;
+  color: var(--texto);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.btn:hover { background: #3a3a50; }
+.btn-primario { background: var(--acento); border-color: var(--acento); }
+.btn-primario:hover { background: var(--acento-oscuro); }
+.btn-peligro { border-color: var(--error-borde); color: #ffb3b3; }
+.btn-estrella { min-width: 48px; font-size: 1.3rem; padding: 0; }
+.btn-estrella[aria-pressed="true"] { color: var(--aviso); border-color: var(--aviso); }
+
+/* ---------- Listas ---------- */
+.item { display: flex; flex-direction: column; gap: 6px; }
+.item-info > * { margin: 2px 0; }
+.item-info .secundario { color: var(--texto-suave); font-size: 0.9rem; }
+
+.punto-color {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  margin-right: 8px;
+  border-radius: 50%;
+  border: 1px solid #fff6;
+  vertical-align: -1px;
+}
+
+.etiqueta {
+  display: inline-block;
+  padding: 1px 10px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  border: 1px solid var(--borde);
+}
+.etiqueta-proximo { color: #7fd1ff; border-color: #7fd1ff; }
+.etiqueta-cerrado { color: var(--aviso); border-color: var(--aviso); }
+.etiqueta-finalizado { color: var(--ok); border-color: var(--ok); }
+.etiqueta-inactivo { color: var(--texto-suave); }
+
+.filtros { display: grid; grid-template-columns: 1fr; gap: 0 12px; margin-bottom: 8px; }
+
+/* Podio de un pronóstico */
+.podio { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+.chip {
+  padding: 4px 10px;
+  background: var(--superficie-2);
+  border: 1px solid var(--borde);
+  border-radius: 8px;
+  font-weight: 600;
+}
+.chip-exacto { border-color: var(--ok); background: #123d26; }
+.chip-podio { border-color: var(--aviso); background: #4a3a10; }
+.puntos { font-weight: 700; color: var(--ok); }
+
+/* ---------- Tabla de posiciones ---------- */
+.tabla-contenedor { overflow-x: auto; }
+.tabla { width: 100%; border-collapse: collapse; }
+.tabla th, .tabla td { padding: 12px 8px; text-align: center; border-bottom: 1px solid var(--borde); }
+.tabla th { color: var(--texto-suave); font-size: 0.8rem; text-transform: uppercase; }
+.tabla td:nth-child(2), .tabla th:nth-child(2) { text-align: left; }
+.tabla .total { font-size: 1.2rem; font-weight: 800; }
+.tabla tbody tr:first-child td:first-child { color: var(--aviso); font-weight: 800; }
+
+/* ---------- Pantallas más anchas ---------- */
+@media (min-width: 640px) {
+  .grilla-campos { grid-template-columns: 1fr 1fr; }
+  .filtros { grid-template-columns: repeat(3, 1fr); }
+  .item { flex-direction: row; justify-content: space-between; align-items: center; }
+  .item .acciones { margin-top: 0; justify-content: flex-end; }
+  .mensajes { top: 96px; }
+}
