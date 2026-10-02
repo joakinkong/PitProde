@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PitProde — Prode de Fórmula 1</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="cabecera">
+    <h1 class="logo">Pit<span>Prode</span></h1>
+    <nav id="navegacion" class="navegacion" aria-label="Secciones"></nav>
+  </header>
+
+  <!-- Avisos y errores globales -->
+  <div id="mensajes" class="mensajes" aria-live="polite"></div>
+  <p id="banner-persistencia" class="banner-persistencia" role="alert" hidden>
+    Los datos no se están guardando en este navegador. Exportá un JSON para no perderlos.
+  </p>
+
+  <main id="vista" class="vista"></main>
+
+  <!-- Orden de carga: primero los datos, después la lógica de puntos y por último la interfaz -->
+  <script src="storage.js"></script>
+  <script src="scoring.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
