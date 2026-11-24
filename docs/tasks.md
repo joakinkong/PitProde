@@ -24,6 +24,7 @@ Cada tarea es chica, tiene un criterio de terminado que se puede comprobar y su 
 | T14 | Arreglar los hallazgos del revisor antes de publicar | Revisor + Desarrollador backend | RN26–RN28, RN30 | T5, T13 | Primera y segunda pasada guardadas con la decisión de cada hallazgo; los graves arreglados con pruebas | ✅ | `12ecd1e` |
 | T15 | Publicar: base en Neon, backend en Render, frontend en Netlify | Desarrollador backend | HU15, HU16 | T7, T14 | Se completó la guía [despliegue.md](despliegue.md); la app responde desde internet con CORS solo para Netlify (verificado en el [informe](informe.md), 5.4) | ✅ | publicación + `README` con el link |
 | T16 | Informe final (con PDF), README con el enlace público y `tasks.md` cerrado | Analista | todas | T15 | Informe con pruebas, plan y justificación del orden; README con el link; todas las tareas marcadas | ✅ | `d7654e6` |
+| T17 | Manual de uso (Markdown y PDF) | Analista | HU1–HU16 | T16 | Cubre a visitante y organizador, cada pantalla, un recorrido completo y los mensajes de error reales; enlazado desde el README | ✅ | `T17` |
 
 ## Fase 0 — Etapas previas al proyecto final
 

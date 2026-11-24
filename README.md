@@ -27,6 +27,7 @@ Máximo por Gran Premio: 18. En la tabla, ante empate de puntos gana quien tenga
 
 | | |
 |---|---|
+| **[docs/manual-de-uso.md](docs/manual-de-uso.md)** | **Manual de uso, paso a paso** ([PDF](docs/manual-de-uso.pdf)) |
 | [docs/idea.md](docs/idea.md) | Qué es y por qué existe |
 | [docs/glosario.md](docs/glosario.md) | Qué significa cada término |
 | [docs/decisiones.md](docs/decisiones.md) | Decisiones, con su pregunta, respuesta y origen |
