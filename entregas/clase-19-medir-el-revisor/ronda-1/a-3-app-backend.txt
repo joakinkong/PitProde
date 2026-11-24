@@ -1,0 +1,30 @@
+---
+
+**1. ¿Qué datos entran desde afuera sin validarse?**
+
+- `body` (POST/PUT): parseado como JSON, llega al service donde `limpiarEntrada` extrae solo los campos esperados y descarta lo que no es string. Controlado.
+- `params.id` (GET/PUT por ID): extraído del regex, pasa por `decodeURIComponent` y va directo al repositorio. Las queries usan `?`, sin interpolación.
+- `query` (GET lista): `Object.fromEntries(url.searchParams)` → objeto plano. `estado` se valida contra lista fija; `gpId` y `jugadorId` van como parámetros SQL sin interpolar. Controlado.
+
+**2. ¿Qué pasa si falla?**
+
+- Excepciones síncronas en el handler están envueltas en try/catch global → siempre devuelve JSON, el servidor no cae.
+- `leerCuerpo` maneja oversized requests intencionalmente: descarta datos en memoria, responde 413, destruye la conexión al llegar a 1 MB. El flujo es correcto.
+
+**3. ¿Qué se rompe cuando el volumen crezca?**
+
+- `service.listar` hace un `referencias.listarGPs()` completo en cada llamada (tabla grande_premios entera). Para un prode de F1 son máximo 24 filas; no es un problema hoy. Tampoco hay paginación en el listado de pronósticos, pero el tope práctico (24 GPs × N jugadores) no lo hace relevante.
+
+**4. ¿Quién puede ejecutar esto y con qué permisos?**
+
+- Cualquier cliente que alcance el servidor. No hay autenticación, sesión, token ni restricción por IP en ninguna capa del stack.
+
+---
+
+**Alta** `app.js:64` — sin autenticación ni autorización en ningún endpoint
+Entrada: cualquier cliente con acceso de red hace un `POST /api/pronosticos` con el `jugadorId` de otro jugador, o un `PUT /api/pronosticos/:id` con un ID ajeno.
+Consecuencia: cualquiera puede crear o sobrescribir pronósticos de cualquier jugador del prode, alterando resultados y puntuaciones sin restricción.
+
+**Baja** `app.js:81` — `decodeURIComponent` sin manejo local de error
+Entrada: una petición a `GET /api/pronosticos/%ZZ` (secuencia UTF-8 inválida) lanza `URIError`.
+Consecuencia: el catch global lo intercepta, devuelve 500 y loguea el error en consola. El servidor sobrevive y no se pierden datos, pero el código de respuesta es incorrecto para una entrada de cliente.

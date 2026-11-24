@@ -1,0 +1,17 @@
+---
+
+**Alta** `storage.js:213` (vía 185 y 231) — `normalizarDatos` lanza sin captura en la cadena de carga
+Entrada: datos válidos según `validarDatos` que, al procesarse en `normalizarDatos` → `recalcularPuntos`, disparen cualquier excepción no prevista (p.ej. un bug en scoring.js introducido después de que el usuario ya tenga datos guardados).
+Consecuencia: `importarDatos` no tiene try/catch alrededor de `normalizarDatos` (solo alrededor de `JSON.parse`), y `cargarDatos` tampoco envuelve a `importarDatos`. La excepción sale sin capturar, el fallback de datos dañados (línea 237) nunca se ejecuta, la app no arranca, y el usuario no puede exportar ni recuperar nada. Único vector de pérdida total de sesión.
+
+---
+
+**Sospecha** `storage.js:171` — `j.color` acepta cualquier string sin validar que sea un valor CSS legal
+Entrada: JSON importado con `"color": "red} body{display:none"` o similar. No leí el código de UI, así que no puedo confirmar cómo se renderiza el campo.
+Consecuencia: si la capa de presentación inyecta `j.color` en un atributo `style` construido como string (p.ej. `'background:' + color`), el importador de un JSON compartido por otro usuario podría ver su interfaz rota o alterada. Dado que el intercambio de archivos JSON entre participantes es el flujo principal de la app, el vector es concreto y ya existe hoy.
+
+---
+
+**Baja** `storage.js:94` — `Date.parse` acepta formatos no-ISO con comportamiento inconsistente entre browsers
+Entrada: JSON importado con `"fechaLargada": "8 March 2026"` o `"2026/03/08"` — cadenas que `Date.parse` acepta en la mayoría de engines pero sin garantía de parseo uniforme.
+Consecuencia: la fecha queda almacenada como string ambiguo; `yaLargo` en scoring.js crea un `new Date(gp.fechaLargada)` sobre ese valor, y el resultado puede diferir entre Chrome, Firefox y Safari, bloqueando o habilitando pronósticos de forma incorrecta según el browser del usuario.

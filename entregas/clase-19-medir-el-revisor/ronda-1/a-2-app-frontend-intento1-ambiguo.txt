@@ -1,0 +1,1 @@
+Hay dos. ¿Cuál querés que revise — `app.js` en la raíz o `backend/src/app.js`?

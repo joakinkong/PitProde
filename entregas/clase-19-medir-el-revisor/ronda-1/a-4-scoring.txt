@@ -1,0 +1,19 @@
+Ya tengo todo lo necesario. Acá va la revisión.
+
+---
+
+**¿Quién puede ejecutar esto y con qué permisos?**
+
+Respondo esta pregunta aparte porque condiciona todo lo demás. El backend (`server.js:16`) escucha en `127.0.0.1` sin autenticación —el propio código lo reconoce. Cualquier proceso local puede hacer `POST /api/pronosticos` con el `jugadorId` que quiera: scoring.js valida que el jugador exista, pero no que quien pide *sea* ese jugador. No hay hallazgo formal acá porque la brecha está en el servidor, no en scoring.js, y el archivo la admite explícitamente. Pero importa como contexto: en la capa HTTP, scoring.js opera sin identidad verificada.
+
+---
+
+**Hallazgos**
+
+[Media] scoring.js:50 — `resultado.pole` nulo → 0 puntos de pole para todos sin ningún aviso
+Entrada: `res_pole TEXT REFERENCES pilotos(id)` no tiene `NOT NULL` en db.js:31. Un `INSERT` o `UPDATE` directo a SQLite sin ese campo es válido hoy. `filaAGP` (referencias.repository.js:8) propaga `pole: null` cuando `fila.res_p1` es truthy pero `fila.res_pole` es NULL: el GP queda marcado como finalizado con resultado incompleto.
+Consecuencia: `puntuarPronostico` evalúa `pronostico.pole === null` → false para todo piloto real → nadie suma los 3 puntos de pole en ese GP. Los scores finales son incorrectos para todos los jugadores del GP. Ninguna capa lanza error ni log. Cuando se agregue el endpoint para cargar resultados (que el backend todavía no tiene), este camino queda expuesto vía HTTP si ese endpoint no fuerza `pole` como requerido.
+
+[Baja] scoring.js:17 — `fechaLargada` inválida → `NaN <= t` = false → `yaLargo` retorna false → GP nunca bloquea
+Entrada: `fecha_largada TEXT NOT NULL` impide null pero no valida el formato. `UPDATE grandes_premios SET fecha_largada = 'texto-cualquiera' WHERE id = 'gp-aus'` es un SQL válido para SQLite. `new Date('texto-cualquiera').getTime()` = NaN; `NaN <= cualquier_número` = false en JS.
+Consecuencia: `validarPronostico` acepta pronósticos para ese GP en cualquier momento, incluso después de que el auto largó. Hoy solo es alcanzable con acceso directo a la DB; cuando exista un endpoint de edición de GPs, se vuelve explotable si ese endpoint no usa `esFecha()` como hace storage.js (nótese que app.js línea 365 ya usa el chequeo más débil `!v.fechaLargada` en su propio formulario de edición).

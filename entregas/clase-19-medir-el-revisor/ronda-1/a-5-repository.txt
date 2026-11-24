@@ -1,0 +1,18 @@
+Ya tengo todo lo que necesito. Acá va la revisión:
+
+---
+
+**Alta** `app.js` — sin autenticación en ningún endpoint de escritura
+Entrada: `POST /api/pronosticos` o `PUT /api/pronosticos/:id` con un body JSON válido desde cualquier cliente HTTP que alcance el puerto, sin credencial ni header especial.
+Consecuencia: Cualquier dispositivo en la misma red puede crear pronósticos en nombre de cualquier jugador o sobreescribir el pronóstico de otro; los puntos calculados en la tabla quedan bajo control de cualquiera que tenga acceso al puerto.
+
+---
+
+**Media** `referencias.repository.js:20` — `listarPilotos` no filtra por `activo`
+Sospecha: no leí `storage.js`, así que no puedo confirmar si hoy hay filas con `activo = 0` en la tabla `pilotos`.
+Entrada: pronóstico con un ID de piloto que tiene `activo = 0` en la DB; es válido como FK pero fue marcado como inactivo.
+Consecuencia: `validarPodio` recibe ese piloto en la lista y lo acepta porque solo chequea existencia, no el campo `activo`. El pronóstico se guarda sin error; ese piloto nunca coincide con ningún resultado real y fuerza 0 puntos en esa posición sin ningún aviso al usuario ni al organizador. El mensaje "Hay un piloto que ya no existe en la grilla" nunca se dispara, que es exactamente el caso para el que está escrito.
+
+---
+
+Lo demás —SQL injection, validaciones de FK, binding de parámetros, encoding del body, el límite de 10 KB— está bien resuelto. El `crearApp` tiene un try/catch global que contiene cualquier excepción no manejada sin tumbar el proceso, lo cual es correcto dado que `node:sqlite` es síncrono y no hay TOCTOU real entre el chequeo del service y la escritura en el repository.

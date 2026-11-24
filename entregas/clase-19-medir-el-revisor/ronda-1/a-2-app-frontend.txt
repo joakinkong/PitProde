@@ -1,0 +1,23 @@
+---
+
+**Respuestas a las cuatro preguntas:**
+
+1. **¿Qué datos entran sin validarse?** El campo `color` del JSON importado. `normalizarDatos` en `storage.js:171` solo aplica `esTexto()` (no-vacío), sin verificar formato CSS válido. Todo lo demás (texto, números, fechas, referencias cruzadas) pasa validaciones explícitas.
+
+2. **¿Qué pasa si falla?** `render()` no tiene try-catch. Si una vista lanza una excepción, `replaceChildren` no llega a ejecutarse y el `#vista` queda con contenido viejo sin ningún aviso al usuario.
+
+3. **¿Qué se rompe con volumen?** Nada que no sea recuperable. `render()` reconstruye el DOM completo en cada interacción y `persistir()` serializa todo en cada guardado, pero con el volumen realista de un prode (20 GPs × 20 jugadores = 400 pronósticos) es imperceptible.
+
+4. **¿Quién puede ejecutar esto y con qué permisos?** Cualquier persona que abra la página. No hay autenticación ni roles. El flujo de exportar/importar JSON está diseñado explícitamente para pasar el archivo de un organizador a otro, lo que es el único vector de entrada externa real.
+
+---
+
+**Media** `app.js:170, 294, 572` / `storage.js:171` — Inyección de CSS vía `color` en JSON importado
+Entrada: un archivo JSON con `"color": "red;background-image:url(https://externo.example/px)"`, compartido a través del flujo normal de exportar/importar entre organizadores.
+Consecuencia: el browser aplica CSS arbitrario en los `style` attributes de los elementos de jugador. No ejecuta JS en navegadores modernos, pero puede romper el layout visualmente y disparar requests salientes (filtrando IP del usuario importador y el momento de apertura de la app).
+
+---
+
+**Baja** `app.js:547-548` — Desreferencia nula en el comparador del sort de pronósticos
+Entrada: un pronóstico en `estado.datos.pronosticos` con un `jugadorId` o `gpId` que no existe en sus colecciones —hoy solo posible editando localStorage manualmente o ante un bug futuro; no es alcanzable vía UI normal.
+Consecuencia: `pintarListaPronosticos` lanza `TypeError: Cannot read properties of undefined (reading 'nombre')`, que burbujea hasta `render()` sin atraparse: la pestaña Pronósticos queda con contenido viejo y sin mensaje de error. Las demás pestañas siguen funcionando; el usuario puede navegar a "Tabla" y volver a estados consistentes.
