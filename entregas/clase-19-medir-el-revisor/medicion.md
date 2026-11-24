@@ -46,7 +46,7 @@ Segunda corrida: los mismos cinco archivos, en sesiones nuevas, con el mismo ped
 | Archivo | Ronda 1 (v2) | Ronda 2 (v3, con la línea nueva) |
 |---|---|---|
 | `storage.js` | **Sí** (color sin validar, como "Sospecha") | **Sí** (color sin validar, como Media, con el escenario `background-image:url(...)`). El primer intento falló por ambigüedad de ruta (había otro `storage.js` en otro proyecto) y lo repetí con `./storage.js`. |
-| `app.js` (frontend) | **No** (encontró la inyección de CSS, no el reloj) | **No** (otra vez la inyección de CSS, como Baja; y sobre el reloj, solo dijo que "es el comportamiento esperado" porque no hay roles) |
+| `app.js` (frontend) | **No** (encontró la inyección de CSS, no el reloj) | **No** (otra vez la inyección de CSS, como Baja; y sobre el reloj no dijo nada: solo que la falta de roles y autenticación es lo esperado en una app local) |
 | `backend/src/app.js` | **Sí** (sin autenticación y `URIError`) | **Sí** (los dos: Alta y Media) |
 | `scoring.js` | **No** (1 Media y 1 Baja, casi todo de otros archivos) | **Sí.** Solo un hallazgo **Baja**, y es del propio `scoring.js`. Sin Alta ni Media. |
 | `pronosticos.repository.js` | **No** (Alta y Media, pero de otros archivos) | **No.** Ahora los hallazgos son del archivo pedido, pero son 2 Media especulativas: `porId.get()` devolviendo `undefined` si "se borró entre el chequeo y el UPDATE", y una violación de UNIQUE por "dos requests casi simultáneas". |

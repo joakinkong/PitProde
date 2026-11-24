@@ -28,6 +28,9 @@ es el TP1 de Generación T (`../tp1`).
 | `styles.css`       | Estilos. |
 | `tests.html`       | Pruebas que corren en el navegador (abrir el archivo). |
 | `scoring.test.js`  | Tests unitarios de puntos y tabla con `node:test`. |
+| `backend/`         | Backend en Node (sin dependencias): Controller → Service → Repository sobre `node:http` y `node:sqlite`. Hoy solo implementa pronósticos (`/api/pronosticos`). El frontend todavía no se conecta. |
+| `entregas/`        | Documentos de las actividades del curso (clases 4, 11, 17 y 19), con su evidencia y los PDF. |
+| `.claude/agents/revisor.md` | Subagente revisor de seguridad y robustez (versión final de las clases 17 y 19). |
 
 ## Reglas de negocio (no cambiarlas sin pedido explícito)
 
@@ -50,10 +53,19 @@ es el TP1 de Generación T (`../tp1`).
 - Los errores se devuelven como listas de mensajes para mostrar en pantalla, no se lanzan excepciones.
 - Comentarios breves arriba de cada función explicando qué devuelve.
 
+## Backend (`backend/`)
+
+- `controllers/` traduce HTTP a llamadas al service y arma los códigos de estado; no tiene reglas ni SQL.
+- `services/` tiene las reglas del prode y **reutiliza `scoring.js`** (no duplicar reglas). No sabe de HTTP ni de SQL; la hora llega por `reloj` para poder probarlo.
+- `repositories/` es el único lugar con SQL, siempre con parámetros (`?`).
+- Los puntos no se guardan: se calculan al leer.
+- Sin autenticación todavía; el servidor escucha solo en `127.0.0.1`. Correrlo: `node backend/seed-demo.js` y `node backend/server.js`.
+- Sin `package.json` ni dependencias: solo módulos de Node (`node:http`, `node:sqlite`, `node:test`).
+
 ## Cómo probar
 
 ```bash
-node --test          # desde la carpeta pitprode: corre scoring.test.js
+node --test          # desde la raíz del proyecto: scoring.test.js y backend/tests/ (46 pruebas)
 ```
 
 Además, abrir `tests.html` en el navegador tiene que mostrar todas las pruebas en verde.
