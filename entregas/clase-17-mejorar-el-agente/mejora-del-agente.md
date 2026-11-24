@@ -10,7 +10,7 @@ Partí de correr la v1 sobre `backend/src/app.js` (el servidor HTTP del backend 
 
 | # | Cambio | Por qué y qué situación mejora |
 |---|---|---|
-| 1 | Se agregó: *"Antes de afirmar algo sobre una función, librería o base de datos, leela con Read o Grep. Si no la leíste, marcalo como 'Sospecha'."* | Evita que el revisor dé por cierto algo que no vio. Situación: la v1 habló de Better-SQLite3 sin haber abierto el repository. |
+| 1 | Se agregó: *"Antes de afirmar algo sobre una función, librería o base de datos, leela con Read o Grep. Si no la leíste, marcalo como 'Sospecha'."* | Evita que el revisor dé por cierto algo que no vio. Situación: la v1 habló de Better-SQLite3 en 2 de 3 corridas, sin que el proyecto lo use. |
 | 2 | Cada hallazgo tiene formato fijo de tres líneas: `[severidad] archivo:línea — qué es`, `Entrada:` y `Consecuencia:`. | Obliga a un escenario concreto en vez de un adjetivo y a una ubicación que se puede ir a mirar. Situación: quien lee el informe puede verificar cada hallazgo en un minuto. |
 | 3 | Se definió qué es **Alta**: *datos perdidos o alterados, acceso sin permiso o caída de todo el servicio*. | Sin una definición, la severidad es una impresión. Situación: la falta de autenticación (que permite alterar datos de otros) debería salir arriba de un código de estado equivocado. |
 | 4 | Se reemplazó "Máximo cinco" por: *"cinco no es una meta: si no hay hallazgos reales, respondé solo 'Sin hallazgos.' No rellenes con casos que dependen de algo que hoy no existe"*. | Corta los hallazgos hipotéticos. Situación: la v1 reportó "`ruta.handler` se llama sin `await`" aunque hoy todos los handlers son síncronos. |
@@ -23,13 +23,13 @@ Como una corrida sola es ruidosa (el resultado cambia de una vez a otra), repet�
 
 | Qué se mide | v1 (3 corridas) | v2 (2 corridas) |
 |---|---|---|
-| Menciona que **no hay autenticación** | 1 de 3 (la corrida 2, como último hallazgo y "Bajo-moderado"; en las otras dos no aparece) | 2 de 2 (en las dos como **Alta**, primero) |
+| Menciona que **no hay autenticación** | 2 de 3 (corrida 1 como hallazgo n.º 1; corrida 2 como último y "Bajo-moderado"; en la 3 no aparece) | 2 de 2 (en las dos como **Alta**, y primero) |
 | Reporta como hallazgo que `ruta.handler` **no tiene `await`** (hoy no pasa: son sincrónicos) | 3 de 3 | 0 de 2 (en una corrida la v2 leyó el controller y descartó el caso) |
-| Afirma una librería que el proyecto no usa | 1 de 3 (Better-SQLite3) | 0 de 2 |
+| Afirma una librería que el proyecto no usa (Better-SQLite3) | 2 de 3 | 0 de 2 |
 | Cada hallazgo trae `archivo:línea`, entrada y consecuencia | no (solo a veces la línea) | sí, en todos los de las dos corridas |
 | Encuentra `decodeURIComponent` → 500 en vez de 400 (bug real) | 3 de 3 | 2 de 2 |
 
-Qué cambió de verdad: la v2 dejó de rellenar con hipótesis y subió a primer lugar el hallazgo más importante del archivo. Qué **no** cambió: el `URIError` se encontró siempre, antes y después.
+Qué cambió de verdad: la v2 dejó de rellenar con hipótesis y de nombrar librerías que no usa, y el hallazgo más importante (falta de autenticación) pasó de aparecer en 2 de 3 corridas, a veces al final, a aparecer en las 2 y con severidad Alta. Esa última diferencia es chica: con tan pocas corridas podría ser azar. Qué **no** cambió: el `URIError` se encontró siempre, antes y después.
 
 ## 3. Lo que no funcionó
 
