@@ -6,10 +6,10 @@ const { aRespuesta, exigirObjeto } = require('./http.js');
 // Crea los handlers de /api/datos, /api/tabla, /api/exportar y /api/importar.
 function crearDatosController(service) {
   return {
-    todo: () => aRespuesta(service.todo(), 200),
-    tabla: () => aRespuesta(service.tabla(), 200),
-    exportar: () => aRespuesta(service.exportar(), 200),
-    importar: ({ body }) => exigirObjeto(body) || aRespuesta(service.importar(body), 200),
+    todo: async () => aRespuesta(await service.todo(), 200),
+    tabla: async () => aRespuesta(await service.tabla(), 200),
+    exportar: async () => aRespuesta(await service.exportar(), 200),
+    importar: async ({ body }) => exigirObjeto(body) || aRespuesta(await service.importar(body), 200),
   };
 }
 

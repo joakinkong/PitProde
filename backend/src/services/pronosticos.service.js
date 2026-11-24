@@ -24,18 +24,18 @@ const noExiste = () => fallo('no_encontrado', ['No existe ese pronóstico.']);
 // Crea el service. "dependencias": { pronosticos, jugadores, pilotos, grandesPremios, reloj, generarId }.
 function crearPronosticosService({ pronosticos, jugadores, pilotos, grandesPremios, reloj = () => new Date(), generarId }) {
   // Arma el objeto "datos" que esperan las validaciones de scoring.js, con lo mínimo necesario.
-  function datosParaValidar(jugadorId, gp) {
-    const jugador = jugadores.obtener(jugadorId);
+  async function datosParaValidar(jugadorId, gp) {
+    const jugador = await jugadores.obtener(jugadorId);
     return {
       jugadores: jugador ? [jugador] : [],
       grandesPremios: gp ? [gp] : [],
-      pilotos: pilotos.listar(),
+      pilotos: await pilotos.listar(),
     };
   }
 
   // Valida el pronóstico con las reglas del prode y rechaza pilotos inactivos (no se puede pronosticar con ellos).
-  function validar(entrada, gp) {
-    const datos = datosParaValidar(entrada.jugadorId, gp);
+  async function validar(entrada, gp) {
+    const datos = await datosParaValidar(entrada.jugadorId, gp);
     const errores = validarPronostico(entrada, datos, reloj());
     if (errores.length) return errores;
     return CAMPOS_PODIO
@@ -52,61 +52,60 @@ function crearPronosticosService({ pronosticos, jugadores, pilotos, grandesPremi
 
   return {
     // Crea un pronóstico. Reglas: jugador y GP existentes, GP sin largar, podio válido, uno por jugador y GP.
-    crear(entrada) {
+    async crear(entrada) {
       const datos = limpiarEntrada(entrada, ['jugadorId', 'gpId', ...CAMPOS_PODIO]);
-      const gp = grandesPremios.obtener(datos.gpId);
-      const errores = validar(datos, gp);
+      const gp = await grandesPremios.obtener(datos.gpId);
+      const errores = await validar(datos, gp);
       if (errores.length) return fallo('invalido', errores);
-      if (pronosticos.obtenerPorJugadorYGP(datos.jugadorId, datos.gpId)) {
+      if (await pronosticos.obtenerPorJugadorYGP(datos.jugadorId, datos.gpId)) {
         return fallo('duplicado', ['Ese jugador ya tiene un pronóstico para este GP. Editá el que existe.']);
       }
-      const creado = pronosticos.crear({ id: generarId(), ...datos, fechaCarga: reloj().toISOString() });
+      const creado = await pronosticos.crear({ id: generarId(), ...datos, fechaCarga: reloj().toISOString() });
       return { ok: true, pronostico: presentar(creado, gp) };
     },
 
     // Cambia el podio y la pole de un pronóstico. El jugador y el GP no se pueden cambiar.
-    editar(id, entrada) {
-      const existente = pronosticos.obtener(id);
+    async editar(id, entrada) {
+      const existente = await pronosticos.obtener(id);
       if (!existente) return noExiste();
       const cambios = limpiarEntrada(entrada, CAMPOS_PODIO);
-      const gp = grandesPremios.obtener(existente.gpId);
-      const errores = validar({ jugadorId: existente.jugadorId, gpId: existente.gpId, ...cambios }, gp);
+      const gp = await grandesPremios.obtener(existente.gpId);
+      const errores = await validar({ jugadorId: existente.jugadorId, gpId: existente.gpId, ...cambios }, gp);
       if (errores.length) return fallo('invalido', errores);
-      const editado = pronosticos.actualizar(id, { ...cambios, fechaCarga: reloj().toISOString() });
+      const editado = await pronosticos.actualizar(id, { ...cambios, fechaCarga: reloj().toISOString() });
       return { ok: true, pronostico: presentar(editado, gp) };
     },
 
     // Borra un pronóstico, solo si el GP todavía no largó.
-    eliminar(id) {
-      const existente = pronosticos.obtener(id);
+    async eliminar(id) {
+      const existente = await pronosticos.obtener(id);
       if (!existente) return noExiste();
-      const gp = grandesPremios.obtener(existente.gpId);
+      const gp = await grandesPremios.obtener(existente.gpId);
       if (gp && yaLargo(gp, reloj())) return fallo('invalido', [MENSAJE_BLOQUEADO]);
-      pronosticos.eliminar(id);
+      await pronosticos.eliminar(id);
       return { ok: true, pronostico: { eliminado: true } };
     },
 
     // Marca o desmarca un pronóstico como favorito (se puede hacer aunque el GP ya haya largado).
-    marcarFavorito(id, favorito) {
+    async marcarFavorito(id, favorito) {
       if (typeof favorito !== 'boolean') return fallo('invalido', ['"favorito" tiene que ser true o false.']);
-      const existente = pronosticos.obtener(id);
+      const existente = await pronosticos.obtener(id);
       if (!existente) return noExiste();
-      const actualizado = pronosticos.ponerFavorito(id, favorito);
-      return { ok: true, pronostico: presentar(actualizado, grandesPremios.obtener(existente.gpId)) };
+      const actualizado = await pronosticos.ponerFavorito(id, favorito);
+      return { ok: true, pronostico: presentar(actualizado, await grandesPremios.obtener(existente.gpId)) };
     },
 
     // Devuelve un pronóstico con sus puntos, o un error si no existe.
-    obtener(id) {
-      const pronostico = pronosticos.obtener(id);
+    async obtener(id) {
+      const pronostico = await pronosticos.obtener(id);
       if (!pronostico) return noExiste();
-      return { ok: true, pronostico: presentar(pronostico, grandesPremios.obtener(pronostico.gpId)) };
+      return { ok: true, pronostico: presentar(pronostico, await grandesPremios.obtener(pronostico.gpId)) };
     },
 
     // Lista pronósticos con sus puntos; "filtros" admite gpId, jugadorId y estado (proximo, cerrado, finalizado).
-    listar(filtros = {}) {
-      const gps = new Map(grandesPremios.listar().map((g) => [g.id, g]));
-      const lista = pronosticos
-        .listar({ gpId: filtros.gpId || null, jugadorId: filtros.jugadorId || null })
+    async listar(filtros = {}) {
+      const gps = new Map((await grandesPremios.listar()).map((g) => [g.id, g]));
+      const lista = (await pronosticos.listar({ gpId: filtros.gpId || null, jugadorId: filtros.jugadorId || null }))
         .map((p) => presentar(p, gps.get(p.gpId)))
         .filter((p) => !filtros.estado || p.estadoGP === filtros.estado);
       return { ok: true, pronosticos: lista };

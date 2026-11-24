@@ -102,7 +102,7 @@ function crearApp(db, { reloj = () => new Date() } = {}) {
       }
       const params = { id: ruta.coincide[1] ? decodeURIComponent(ruta.coincide[1]) : undefined };
       const query = Object.fromEntries(url.searchParams);
-      const { estado, cuerpo } = ruta.handler({ params, query, body });
+      const { estado, cuerpo } = await ruta.handler({ params, query, body });
       return responder(res, estado, cuerpo);
     } catch (error) {
       console.error(error);

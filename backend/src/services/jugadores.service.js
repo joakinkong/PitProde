@@ -12,41 +12,41 @@ const texto = (valor) => (typeof valor === 'string' ? valor.trim() : '');
 // Crea el service de jugadores. "dependencias": { jugadores, reloj, generarId }.
 function crearJugadoresService({ jugadores, reloj = () => new Date(), generarId }) {
   // Normaliza la entrada y devuelve { datos, errores }. "exceptoId" es el jugador que se está editando.
-  function revisar(entrada, exceptoId) {
+  async function revisar(entrada, exceptoId) {
     const datos = { nombre: texto(entrada.nombre), apodo: texto(entrada.apodo), color: texto(entrada.color) || COLOR_POR_DEFECTO };
     if (!datos.nombre) return { datos, errores: ['El nombre es obligatorio.'], motivo: 'invalido' };
     if (datos.nombre.length > MAX_NOMBRE || datos.apodo.length > MAX_APODO) {
       return { datos, errores: [`El nombre admite hasta ${MAX_NOMBRE} caracteres y el apodo hasta ${MAX_APODO}.`], motivo: 'invalido' };
     }
-    const repetido = jugadores.listar().some((j) => j.id !== exceptoId && j.nombre.toLowerCase() === datos.nombre.toLowerCase());
+    const repetido = (await jugadores.listar()).some((j) => j.id !== exceptoId && j.nombre.toLowerCase() === datos.nombre.toLowerCase());
     if (repetido) return { datos, errores: ['Ya existe un jugador con ese nombre.'], motivo: 'duplicado' };
     return { datos, errores: [] };
   }
 
   return {
     // Lista todos los jugadores.
-    listar: () => ({ ok: true, valor: jugadores.listar() }),
+    listar: async () => ({ ok: true, valor: await jugadores.listar() }),
 
     // Crea un jugador con id y fecha de alta del servidor.
-    crear(entrada) {
-      const { datos, errores, motivo } = revisar(entrada);
+    async crear(entrada) {
+      const { datos, errores, motivo } = await revisar(entrada);
       if (errores.length) return fallo(motivo, errores);
-      return { ok: true, valor: jugadores.crear({ id: generarId(), ...datos, fechaAlta: reloj().toISOString() }) };
+      return { ok: true, valor: await jugadores.crear({ id: generarId(), ...datos, fechaAlta: reloj().toISOString() }) };
     },
 
     // Edita nombre, apodo y color.
-    editar(id, entrada) {
-      if (!jugadores.obtener(id)) return noExiste();
-      const { datos, errores, motivo } = revisar(entrada, id);
+    async editar(id, entrada) {
+      if (!await jugadores.obtener(id)) return noExiste();
+      const { datos, errores, motivo } = await revisar(entrada, id);
       if (errores.length) return fallo(motivo, errores);
-      return { ok: true, valor: jugadores.actualizar(id, datos) };
+      return { ok: true, valor: await jugadores.actualizar(id, datos) };
     },
 
     // Borra el jugador y, con él, sus pronósticos. Devuelve cuántos se borraron.
-    eliminar(id) {
-      if (!jugadores.obtener(id)) return noExiste();
-      const pronosticosBorrados = jugadores.contarPronosticos(id);
-      jugadores.eliminar(id);
+    async eliminar(id) {
+      if (!await jugadores.obtener(id)) return noExiste();
+      const pronosticosBorrados = await jugadores.contarPronosticos(id);
+      await jugadores.eliminar(id);
       return { ok: true, valor: { eliminado: true, pronosticosBorrados } };
     },
   };

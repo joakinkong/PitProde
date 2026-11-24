@@ -31,32 +31,32 @@ function revisar(entrada) {
 function crearPilotosService({ pilotos, generarId }) {
   return {
     // Lista todos los pilotos.
-    listar: () => ({ ok: true, valor: pilotos.listar() }),
+    listar: async () => ({ ok: true, valor: await pilotos.listar() }),
 
     // Crea un piloto con id del servidor.
-    crear(entrada) {
+    async crear(entrada) {
       const { datos, errores } = revisar(entrada);
       if (errores.length) return fallo('invalido', errores);
-      return { ok: true, valor: pilotos.crear({ id: generarId(), ...datos }) };
+      return { ok: true, valor: await pilotos.crear({ id: generarId(), ...datos }) };
     },
 
     // Edita un piloto.
-    editar(id, entrada) {
-      if (!pilotos.obtener(id)) return noExiste();
+    async editar(id, entrada) {
+      if (!await pilotos.obtener(id)) return noExiste();
       const { datos, errores } = revisar(entrada);
       if (errores.length) return fallo('invalido', errores);
-      return { ok: true, valor: pilotos.actualizar(id, datos) };
+      return { ok: true, valor: await pilotos.actualizar(id, datos) };
     },
 
     // Borra un piloto, salvo que algún pronóstico o resultado lo use (en ese caso se sugiere desactivarlo).
-    eliminar(id) {
-      const piloto = pilotos.obtener(id);
+    async eliminar(id) {
+      const piloto = await pilotos.obtener(id);
       if (!piloto) return noExiste();
-      const usos = pilotos.usos(id);
+      const usos = await pilotos.usos(id);
       if (usos.pronosticos + usos.resultados > 0) {
         return fallo('en_uso', [`${piloto.nombre} aparece en ${usos.pronosticos} pronóstico(s) y ${usos.resultados} resultado(s). Desactivalo en vez de borrarlo.`]);
       }
-      pilotos.eliminar(id);
+      await pilotos.eliminar(id);
       return { ok: true, valor: { eliminado: true } };
     },
   };

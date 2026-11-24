@@ -6,35 +6,31 @@ const aJugador = (f) => ({ id: f.id, nombre: f.nombre, apodo: f.apodo, color: f.
 
 // Devuelve el repositorio de jugadores, que usa la base "db".
 function crearJugadoresRepository(db) {
-  const todos = db.prepare('SELECT * FROM jugadores ORDER BY nombre');
-  const porId = db.prepare('SELECT * FROM jugadores WHERE id = ?');
-  const insertar = db.prepare('INSERT INTO jugadores (id, nombre, apodo, color, fecha_alta) VALUES (?, ?, ?, ?, ?)');
-  const actualizar = db.prepare('UPDATE jugadores SET nombre = ?, apodo = ?, color = ? WHERE id = ?');
-  const borrar = db.prepare('DELETE FROM jugadores WHERE id = ?');
-  const contarPronosticos = db.prepare('SELECT COUNT(*) AS n FROM pronosticos WHERE jugador_id = ?');
+  // Devuelve el jugador o undefined si no existe.
+  async function obtener(id) {
+    const fila = await db.uno('SELECT * FROM jugadores WHERE id = ?', [id]);
+    return fila ? aJugador(fila) : undefined;
+  }
 
   return {
     // Lista todos los jugadores.
-    listar: () => todos.all().map(aJugador),
-    // Devuelve el jugador o undefined si no existe.
-    obtener: (id) => {
-      const fila = porId.get(id);
-      return fila ? aJugador(fila) : undefined;
-    },
+    listar: async () => (await db.todos('SELECT * FROM jugadores ORDER BY nombre')).map(aJugador),
+    obtener,
     // Inserta un jugador y lo devuelve.
-    crear: (j) => {
-      insertar.run(j.id, j.nombre, j.apodo, j.color, j.fechaAlta);
-      return aJugador(porId.get(j.id));
+    crear: async (j) => {
+      await db.ejecutar('INSERT INTO jugadores (id, nombre, apodo, color, fecha_alta) VALUES (?, ?, ?, ?, ?)',
+        [j.id, j.nombre, j.apodo, j.color, j.fechaAlta]);
+      return obtener(j.id);
     },
     // Cambia nombre, apodo y color. Devuelve el jugador actualizado.
-    actualizar: (id, { nombre, apodo, color }) => {
-      actualizar.run(nombre, apodo, color, id);
-      return aJugador(porId.get(id));
+    actualizar: async (id, { nombre, apodo, color }) => {
+      await db.ejecutar('UPDATE jugadores SET nombre = ?, apodo = ?, color = ? WHERE id = ?', [nombre, apodo, color, id]);
+      return obtener(id);
     },
     // Borra el jugador (sus pronósticos se borran con él, por la clave foránea).
-    eliminar: (id) => { borrar.run(id); },
+    eliminar: async (id) => { await db.ejecutar('DELETE FROM jugadores WHERE id = ?', [id]); },
     // Cuántos pronósticos tiene el jugador.
-    contarPronosticos: (id) => contarPronosticos.get(id).n,
+    contarPronosticos: async (id) => Number((await db.uno('SELECT COUNT(*) AS n FROM pronosticos WHERE jugador_id = ?', [id])).n),
   };
 }
 

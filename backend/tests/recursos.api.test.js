@@ -13,7 +13,7 @@ let db;
 let ahora = new Date('2026-03-01T00:00:00Z'); // antes de que largue Australia (8/3/2026 04:00 UTC)
 
 before(async () => {
-  db = abrirBase(':memory:');
+  db = await abrirBase(':memory:');
   servidor = crearApp(db, { reloj: () => ahora });
   await new Promise((resolver) => servidor.listen(0, '127.0.0.1', resolver));
   base = `http://127.0.0.1:${servidor.address().port}`;
@@ -150,10 +150,10 @@ describe('exportar, importar y reiniciar', () => {
     assert.equal((await pedir('POST', '/api/importar', vacio)).estado, 200);
     const datos = (await pedir('GET', '/api/datos')).cuerpo;
     assert.deepEqual([datos.jugadores.length, datos.pilotos.length, datos.grandesPremios.length], [0, 0, 0]);
-    const reabierta = abrirBase(':memory:'); // base nueva: sí se precarga
-    assert.equal(reabierta.prepare('SELECT COUNT(*) AS n FROM pilotos').get().n, 22);
-    db.exec('PRAGMA user_version'); // la base de este test ya quedó marcada: no se vuelve a precargar
-    assert.equal(db.prepare('PRAGMA user_version').get().user_version, 1);
+    const reabierta = await abrirBase(':memory:'); // base nueva: sí se precarga
+    assert.equal(Number((await reabierta.uno('SELECT COUNT(*) AS n FROM pilotos')).n), 22);
+    // la base de este test ya quedó marcada: no se vuelve a precargar aunque esté vacía
+    assert.ok(await db.uno("SELECT valor FROM meta WHERE clave = 'semilla'"));
   });
   test('el importar acepta cuerpos de más de 10 KB (hasta 2 MB), el resto de las rutas no', async () => {
     const grande = { relleno: 'x'.repeat(20000) };

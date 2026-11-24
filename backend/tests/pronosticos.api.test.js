@@ -12,8 +12,8 @@ let db;
 let ahora = new Date('2026-03-01T00:00:00Z');
 
 before(async () => {
-  db = abrirBase(':memory:');
-  db.prepare('INSERT INTO jugadores (id, nombre, fecha_alta) VALUES (?, ?, ?)').run('ana', 'Ana', '2026-01-01T00:00:00Z');
+  db = await abrirBase(':memory:');
+  await db.ejecutar('INSERT INTO jugadores (id, nombre, fecha_alta) VALUES (?, ?, ?)', ['ana', 'Ana', '2026-01-01T00:00:00Z']);
   servidor = crearApp(db, { reloj: () => ahora });
   await new Promise((resolver) => servidor.listen(0, '127.0.0.1', resolver));
   base = `http://127.0.0.1:${servidor.address().port}`;

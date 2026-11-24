@@ -9,10 +9,17 @@ const { crearApp } = require('./src/app.js');
 
 const puerto = Number(process.env.PORT) || 3000;
 const rutaBase = process.env.PITPRODE_DB || path.join(__dirname, 'datos', 'pitprode.sqlite');
-fs.mkdirSync(path.dirname(rutaBase), { recursive: true });
 
-const servidor = crearApp(abrirBase(rutaBase));
-// Escucha solo en la máquina local: todavía no hay autenticación.
-servidor.listen(puerto, '127.0.0.1', () => {
-  console.log(`PitProde backend en http://127.0.0.1:${puerto} (base: ${rutaBase})`);
+async function iniciar() {
+  fs.mkdirSync(path.dirname(rutaBase), { recursive: true });
+  const servidor = crearApp(await abrirBase(rutaBase));
+  // Escucha solo en la máquina local: todavía no hay autenticación.
+  servidor.listen(puerto, '127.0.0.1', () => {
+    console.log(`PitProde backend en http://127.0.0.1:${puerto} (base: ${rutaBase})`);
+  });
+}
+
+iniciar().catch((error) => {
+  console.error('No se pudo iniciar el servidor:', error);
+  process.exit(1);
 });

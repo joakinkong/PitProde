@@ -10,46 +10,46 @@ function aGP(f) {
 
 // Devuelve el repositorio de Grandes Premios, que usa la base "db".
 function crearGrandesPremiosRepository(db) {
-  const todos = db.prepare('SELECT * FROM grandes_premios ORDER BY fecha_largada');
-  const porId = db.prepare('SELECT * FROM grandes_premios WHERE id = ?');
-  const insertar = db.prepare('INSERT INTO grandes_premios (id, nombre, circuito, fecha_largada) VALUES (?, ?, ?, ?)');
-  const actualizar = db.prepare('UPDATE grandes_premios SET nombre = ?, circuito = ?, fecha_largada = ? WHERE id = ?');
-  const borrar = db.prepare('DELETE FROM grandes_premios WHERE id = ?');
-  const ponerResultado = db.prepare('UPDATE grandes_premios SET res_p1 = ?, res_p2 = ?, res_p3 = ?, res_pole = ? WHERE id = ?');
-  const contarPronosticos = db.prepare('SELECT COUNT(*) AS n FROM pronosticos WHERE gp_id = ?');
+  // Devuelve el GP (con su resultado o null) o undefined si no existe.
+  async function obtener(id) {
+    const fila = await db.uno('SELECT * FROM grandes_premios WHERE id = ?', [id]);
+    return fila ? aGP(fila) : undefined;
+  }
+  const ponerResultado = (id, r) => db.ejecutar(
+    'UPDATE grandes_premios SET res_p1 = ?, res_p2 = ?, res_p3 = ?, res_pole = ? WHERE id = ?',
+    [r.p1, r.p2, r.p3, r.pole, id],
+  );
 
   return {
     // Lista todos los GPs por fecha de largada.
-    listar: () => todos.all().map(aGP),
-    // Devuelve el GP (con su resultado o null) o undefined si no existe.
-    obtener: (id) => {
-      const fila = porId.get(id);
-      return fila ? aGP(fila) : undefined;
-    },
+    listar: async () => (await db.todos('SELECT * FROM grandes_premios ORDER BY fecha_largada')).map(aGP),
+    obtener,
     // Inserta un GP sin resultado y lo devuelve.
-    crear: (g) => {
-      insertar.run(g.id, g.nombre, g.circuito, g.fechaLargada);
-      return aGP(porId.get(g.id));
+    crear: async (g) => {
+      await db.ejecutar('INSERT INTO grandes_premios (id, nombre, circuito, fecha_largada) VALUES (?, ?, ?, ?)',
+        [g.id, g.nombre, g.circuito, g.fechaLargada]);
+      return obtener(g.id);
     },
     // Cambia nombre, circuito y largada. Devuelve el GP actualizado.
-    actualizar: (id, { nombre, circuito, fechaLargada }) => {
-      actualizar.run(nombre, circuito, fechaLargada, id);
-      return aGP(porId.get(id));
+    actualizar: async (id, { nombre, circuito, fechaLargada }) => {
+      await db.ejecutar('UPDATE grandes_premios SET nombre = ?, circuito = ?, fecha_largada = ? WHERE id = ?',
+        [nombre, circuito, fechaLargada, id]);
+      return obtener(id);
     },
     // Borra el GP (sus pronósticos se borran con él, por la clave foránea).
-    eliminar: (id) => { borrar.run(id); },
+    eliminar: async (id) => { await db.ejecutar('DELETE FROM grandes_premios WHERE id = ?', [id]); },
     // Guarda o corrige el resultado. Devuelve el GP actualizado.
-    guardarResultado: (id, r) => {
-      ponerResultado.run(r.p1, r.p2, r.p3, r.pole, id);
-      return aGP(porId.get(id));
+    guardarResultado: async (id, r) => {
+      await ponerResultado(id, r);
+      return obtener(id);
     },
     // Quita el resultado. Devuelve el GP actualizado.
-    quitarResultado: (id) => {
-      ponerResultado.run(null, null, null, null, id);
-      return aGP(porId.get(id));
+    quitarResultado: async (id) => {
+      await ponerResultado(id, { p1: null, p2: null, p3: null, pole: null });
+      return obtener(id);
     },
     // Cuántos pronósticos tiene el GP.
-    contarPronosticos: (id) => contarPronosticos.get(id).n,
+    contarPronosticos: async (id) => Number((await db.uno('SELECT COUNT(*) AS n FROM pronosticos WHERE gp_id = ?', [id])).n),
   };
 }
 

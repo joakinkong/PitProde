@@ -7,56 +7,53 @@ function filaAPronostico(fila) {
   return {
     id: fila.id, jugadorId: fila.jugador_id, gpId: fila.gp_id,
     p1: fila.p1, p2: fila.p2, p3: fila.p3, pole: fila.pole,
-    fechaCarga: fila.fecha_carga, favorito: fila.favorito === 1,
+    fechaCarga: fila.fecha_carga, favorito: Number(fila.favorito) === 1,
   };
 }
 
 // Devuelve el repositorio de pronósticos, que usa la base "db".
 function crearPronosticosRepository(db) {
-  const insertar = db.prepare(`INSERT INTO pronosticos
-    (id, jugador_id, gp_id, p1, p2, p3, pole, fecha_carga) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`);
-  const actualizar = db.prepare('UPDATE pronosticos SET p1 = ?, p2 = ?, p3 = ?, pole = ?, fecha_carga = ? WHERE id = ?');
-  const porId = db.prepare('SELECT * FROM pronosticos WHERE id = ?');
-  const borrar = db.prepare('DELETE FROM pronosticos WHERE id = ?');
-  const ponerFavorito = db.prepare('UPDATE pronosticos SET favorito = ? WHERE id = ?');
-  const porJugadorYGP = db.prepare('SELECT * FROM pronosticos WHERE jugador_id = ? AND gp_id = ?');
-  // Los filtros son opcionales: "? IS NULL OR campo = ?" evita armar el SQL con texto.
-  const listar = db.prepare(`SELECT * FROM pronosticos
-    WHERE (? IS NULL OR gp_id = ?) AND (? IS NULL OR jugador_id = ?)
-    ORDER BY fecha_carga, id`);
+  // Devuelve el pronóstico o undefined si no existe.
+  async function obtener(id) {
+    const fila = await db.uno('SELECT * FROM pronosticos WHERE id = ?', [id]);
+    return fila ? filaAPronostico(fila) : undefined;
+  }
 
   return {
+    obtener,
     // Inserta un pronóstico nuevo y lo devuelve.
-    crear: (p) => {
-      insertar.run(p.id, p.jugadorId, p.gpId, p.p1, p.p2, p.p3, p.pole, p.fechaCarga);
-      return filaAPronostico(porId.get(p.id));
+    crear: async (p) => {
+      await db.ejecutar(`INSERT INTO pronosticos
+        (id, jugador_id, gp_id, p1, p2, p3, pole, fecha_carga) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [p.id, p.jugadorId, p.gpId, p.p1, p.p2, p.p3, p.pole, p.fechaCarga]);
+      return obtener(p.id);
     },
     // Cambia el podio, la pole y la fecha de carga. Devuelve el pronóstico actualizado.
-    actualizar: (id, { p1, p2, p3, pole, fechaCarga }) => {
-      actualizar.run(p1, p2, p3, pole, fechaCarga, id);
-      return filaAPronostico(porId.get(id));
+    actualizar: async (id, { p1, p2, p3, pole, fechaCarga }) => {
+      await db.ejecutar('UPDATE pronosticos SET p1 = ?, p2 = ?, p3 = ?, pole = ?, fecha_carga = ? WHERE id = ?',
+        [p1, p2, p3, pole, fechaCarga, id]);
+      return obtener(id);
     },
     // Borra el pronóstico.
-    eliminar: (id) => { borrar.run(id); },
+    eliminar: async (id) => { await db.ejecutar('DELETE FROM pronosticos WHERE id = ?', [id]); },
     // Marca o desmarca el favorito. Devuelve el pronóstico actualizado.
-    ponerFavorito: (id, valor) => {
-      ponerFavorito.run(valor ? 1 : 0, id);
-      return filaAPronostico(porId.get(id));
-    },
-    // Devuelve el pronóstico o undefined si no existe.
-    obtener: (id) => {
-      const fila = porId.get(id);
-      return fila ? filaAPronostico(fila) : undefined;
+    ponerFavorito: async (id, valor) => {
+      await db.ejecutar('UPDATE pronosticos SET favorito = ? WHERE id = ?', [valor ? 1 : 0, id]);
+      return obtener(id);
     },
     // Devuelve el pronóstico de ese jugador para ese GP, o undefined.
-    obtenerPorJugadorYGP: (jugadorId, gpId) => {
-      const fila = porJugadorYGP.get(jugadorId, gpId);
+    obtenerPorJugadorYGP: async (jugadorId, gpId) => {
+      const fila = await db.uno('SELECT * FROM pronosticos WHERE jugador_id = ? AND gp_id = ?', [jugadorId, gpId]);
       return fila ? filaAPronostico(fila) : undefined;
     },
     // Lista los pronósticos; "gpId" y "jugadorId" son filtros opcionales (null = todos).
-    listar: ({ gpId = null, jugadorId = null } = {}) => (
-      listar.all(gpId, gpId, jugadorId, jugadorId).map(filaAPronostico)
-    ),
+    // El CAST es necesario en Postgres, que no puede deducir el tipo de un parámetro que solo se compara con NULL.
+    listar: async ({ gpId = null, jugadorId = null } = {}) => (await db.todos(
+      `SELECT * FROM pronosticos
+       WHERE (CAST(? AS TEXT) IS NULL OR gp_id = ?) AND (CAST(? AS TEXT) IS NULL OR jugador_id = ?)
+       ORDER BY fecha_carga, id`,
+      [gpId, gpId, jugadorId, jugadorId],
+    )).map(filaAPronostico),
   };
 }
 

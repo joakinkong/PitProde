@@ -32,47 +32,47 @@ function crearGrandesPremiosService({ grandesPremios, pilotos, reloj = () => new
 
   return {
     // Lista todos los GPs con su estado.
-    listar: () => ({ ok: true, valor: grandesPremios.listar().map(presentar) }),
+    listar: async () => ({ ok: true, valor: (await grandesPremios.listar()).map(presentar) }),
 
     // Crea un GP sin resultado.
-    crear(entrada) {
+    async crear(entrada) {
       const { datos, errores } = revisar(entrada, null);
       if (errores.length) return fallo('invalido', errores);
-      return { ok: true, valor: presentar(grandesPremios.crear({ id: generarId(), ...datos })) };
+      return { ok: true, valor: presentar(await grandesPremios.crear({ id: generarId(), ...datos })) };
     },
 
     // Edita nombre, circuito y largada.
-    editar(id, entrada) {
-      const existente = grandesPremios.obtener(id);
+    async editar(id, entrada) {
+      const existente = await grandesPremios.obtener(id);
       if (!existente) return noExiste();
       const { datos, errores } = revisar(entrada, existente);
       if (errores.length) return fallo('invalido', errores);
-      return { ok: true, valor: presentar(grandesPremios.actualizar(id, datos)) };
+      return { ok: true, valor: presentar(await grandesPremios.actualizar(id, datos)) };
     },
 
     // Borra el GP y, con él, sus pronósticos. Devuelve cuántos se borraron.
-    eliminar(id) {
-      if (!grandesPremios.obtener(id)) return noExiste();
-      const pronosticosBorrados = grandesPremios.contarPronosticos(id);
-      grandesPremios.eliminar(id);
+    async eliminar(id) {
+      if (!await grandesPremios.obtener(id)) return noExiste();
+      const pronosticosBorrados = await grandesPremios.contarPronosticos(id);
+      await grandesPremios.eliminar(id);
       return { ok: true, valor: { eliminado: true, pronosticosBorrados } };
     },
 
     // Carga o corrige el resultado real; solo se puede después de la largada (hora del servidor).
-    cargarResultado(id, entrada) {
-      const gp = grandesPremios.obtener(id);
+    async cargarResultado(id, entrada) {
+      const gp = await grandesPremios.obtener(id);
       if (!gp) return noExiste();
       const resultado = {};
       ['p1', 'p2', 'p3', 'pole'].forEach((campo) => { resultado[campo] = texto(entrada[campo]); });
-      const errores = validarResultado(resultado, gp, pilotos.listar(), reloj());
+      const errores = validarResultado(resultado, gp, await pilotos.listar(), reloj());
       if (errores.length) return fallo('invalido', errores);
-      return { ok: true, valor: presentar(grandesPremios.guardarResultado(id, resultado)) };
+      return { ok: true, valor: presentar(await grandesPremios.guardarResultado(id, resultado)) };
     },
 
     // Quita el resultado: los pronósticos del GP vuelven a quedar sin puntos.
-    quitarResultado(id) {
-      if (!grandesPremios.obtener(id)) return noExiste();
-      return { ok: true, valor: presentar(grandesPremios.quitarResultado(id)) };
+    async quitarResultado(id) {
+      if (!await grandesPremios.obtener(id)) return noExiste();
+      return { ok: true, valor: presentar(await grandesPremios.quitarResultado(id)) };
     },
   };
 }

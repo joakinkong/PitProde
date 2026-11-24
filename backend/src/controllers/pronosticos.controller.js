@@ -16,22 +16,22 @@ function aRespuesta(resultado, estadoOk) {
 function crearPronosticosController(service) {
   return {
     // GET /api/pronosticos?gpId=&jugadorId=&estado=
-    listar: ({ query }) => {
+    listar: async ({ query }) => {
       if (query.estado && !ESTADOS_VALIDOS.includes(query.estado)) {
         return respuestaError(400, [`El estado tiene que ser uno de: ${ESTADOS_VALIDOS.join(', ')}.`]);
       }
-      return aRespuesta(service.listar(query), 200);
+      return aRespuesta(await service.listar(query), 200);
     },
     // GET /api/pronosticos/:id
-    obtener: ({ params }) => aRespuesta(service.obtener(params.id), 200),
+    obtener: async ({ params }) => aRespuesta(await service.obtener(params.id), 200),
     // POST /api/pronosticos
-    crear: ({ body }) => exigirObjeto(body) || aRespuesta(service.crear(body), 201),
+    crear: async ({ body }) => exigirObjeto(body) || aRespuesta(await service.crear(body), 201),
     // PUT /api/pronosticos/:id
-    editar: ({ params, body }) => exigirObjeto(body) || aRespuesta(service.editar(params.id, body), 200),
+    editar: async ({ params, body }) => exigirObjeto(body) || aRespuesta(await service.editar(params.id, body), 200),
     // DELETE /api/pronosticos/:id
-    eliminar: ({ params }) => aRespuesta(service.eliminar(params.id), 200),
+    eliminar: async ({ params }) => aRespuesta(await service.eliminar(params.id), 200),
     // PATCH /api/pronosticos/:id/favorito   cuerpo: { "favorito": true }
-    favorito: ({ params, body }) => exigirObjeto(body) || aRespuesta(service.marcarFavorito(params.id, body.favorito), 200),
+    favorito: async ({ params, body }) => exigirObjeto(body) || aRespuesta(await service.marcarFavorito(params.id, body.favorito), 200),
   };
 }
 
