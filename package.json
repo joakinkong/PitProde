@@ -1,0 +1,20 @@
+{
+  "name": "pitprode",
+  "version": "1.0.0",
+  "description": "Prode de Fórmula 1 entre amigos",
+  "private": true,
+  "scripts": {
+    "start": "node backend/server.js",
+    "test": "node --test",
+    "build:frontend": "node scripts/build-frontend.js"
+  },
+  "engines": {
+    "node": ">=22.13"
+  },
+  "dependencies": {
+    "pg": "^8.23.1"
+  },
+  "devDependencies": {
+    "pg-mem": "^3.0.14"
+  }
+}

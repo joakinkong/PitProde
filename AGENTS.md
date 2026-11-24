@@ -66,7 +66,7 @@ es el TP1 de Generación T (`../tp1`).
 - El frontend valida solo para dar respuesta rápida; el backend valida siempre.
 - Al crear la base se cargan los pilotos y GPs 2026 una sola vez (`PRAGMA user_version`); "Borrar todo" deja la base vacía de verdad.
 - Sin autenticación todavía; el servidor escucha solo en `127.0.0.1`.
-- Sin `package.json` ni dependencias: solo módulos de Node (`node:http`, `node:sqlite`, `node:test`).
+- Dependencias permitidas (autorizadas por el autor para publicar la app): `pg` (Postgres) y, solo para tests, `pg-mem`. Cualquier otra requiere pedido explícito. Lo demás son módulos de Node (`node:http`, `node:sqlite`, `node:test`).
 
 ## Cómo probar
 
@@ -80,4 +80,4 @@ Cualquier cambio en `scoring.js` o `storage.js` tiene que dejar `node --test` en
 
 - Antes de escribir código, analizar y proponer; implementar solo lo aprobado.
 - Refactors: una mejora por vez y sin cambiar comportamiento. Correr los tests antes y después.
-- No agregar dependencias ni archivos de configuración (package.json, bundlers) sin pedido.
+- No agregar dependencias ni archivos de configuración nuevos sin pedido (hay `package.json` desde que se publicó la app).
