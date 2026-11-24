@@ -63,7 +63,6 @@ function crearAdaptadorSqlite(ruta) {
   };
   const adaptador = {
     dialecto: 'sqlite',
-    bd,
     todos: async (sql, params = []) => preparar(sql).all(...params),
     uno: async (sql, params = []) => preparar(sql).get(...params),
     ejecutar: async (sql, params = []) => { preparar(sql).run(...params); },
@@ -123,15 +122,16 @@ function crearAdaptadorPostgres(pool) {
 // ---------- Datos iniciales ----------
 
 // Carga los pilotos y GPs 2026 (los mismos que usa el frontend). Solo se llama con la base recién creada.
+// "ON CONFLICT DO NOTHING" hace que no pase nada grave si dos servidores arrancan a la vez contra una base vacía.
 async function cargarDatosIniciales(db) {
   const datos = crearDatosIniciales();
   await db.transaccion(async (tx) => {
     for (const p of datos.pilotos) {
-      await tx.ejecutar('INSERT INTO pilotos (id, nombre, equipo, numero, activo) VALUES (?, ?, ?, ?, ?)',
+      await tx.ejecutar('INSERT INTO pilotos (id, nombre, equipo, numero, activo) VALUES (?, ?, ?, ?, ?) ON CONFLICT (id) DO NOTHING',
         [p.id, p.nombre, p.equipo, p.numero, p.activo ? 1 : 0]);
     }
     for (const g of datos.grandesPremios) {
-      await tx.ejecutar('INSERT INTO grandes_premios (id, nombre, circuito, fecha_largada) VALUES (?, ?, ?, ?)',
+      await tx.ejecutar('INSERT INTO grandes_premios (id, nombre, circuito, fecha_largada) VALUES (?, ?, ?, ?) ON CONFLICT (id) DO NOTHING',
         [g.id, g.nombre, g.circuito, g.fechaLargada]);
     }
   });
@@ -158,7 +158,7 @@ async function abrirBase(ruta = ':memory:') {
   const db = crearAdaptadorSqlite(ruta);
   for (const sentencia of ESQUEMA) await db.ejecutar(sentencia);
   // Las bases creadas antes de existir la tabla meta marcaban la carga inicial con user_version.
-  const { user_version: version } = db.bd.prepare('PRAGMA user_version').get();
+  const { user_version: version } = await db.uno('PRAGMA user_version');
   if (version >= 1) await db.ejecutar("INSERT INTO meta (clave, valor) VALUES ('semilla', '1') ON CONFLICT (clave) DO NOTHING");
   await prepararDatos(db);
   return db;

@@ -1,0 +1,13 @@
+Ya tengo todo lo que necesito.
+
+---
+
+**Media** `acceso.service.js:34` — Entradas con `hasta: 0` nunca son eliminadas por `limpiarVencidos`
+Entrada: cualquier IP que falle entre 1 y 4 veces (sin llegar al bloqueo) genera una entrada con `hasta: 0`; la condición `registro.hasta && ...` es falsa porque `0` es falsy, así que esa entrada se omite siempre.
+Consecuencia: las entradas solo se borran si esa misma IP después hace login exitoso. Con suficiente tráfico fallido desde IPs distintas, el Map crece sin límite y el proceso consume memoria de forma acumulativa hasta que el runtime lo mata.
+
+---
+
+**Baja** `acceso.service.js:49` — `ip` puede ser `undefined` como clave del Map
+Entrada: si `socket.remoteAddress` no está disponible (socket cerrado prematuramente), `app.js` pasa `undefined` al service; `intentos.get(undefined)` funciona en JS, así que todas esas conexiones comparten el mismo bucket.
+Consecuencia: cuatro intentos fallidos de conexiones no relacionadas —pero todas con IP no resuelta— activarían un bloqueo conjunto de 15 minutos para ese bucket, afectando a usuarios legítimos en la misma condición de red.

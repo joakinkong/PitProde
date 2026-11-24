@@ -1,0 +1,13 @@
+Leí el archivo principal, `estaticos.js`, `routes.js`, `acceso.service.js`, `config.js`, `acceso.controller.js` y `package.json`. Ahora el hallazgo.
+
+---
+
+**Baja** `app.js:53-72` / `app.js:111` — `leerCuerpo` no tiene timeout propio; el servidor depende del default de Node.js
+
+**Entrada:** petición `POST /api/acceso` (el único endpoint de escritura que llega a `leerCuerpo` sin token previo — el resto pasa por el check de auth en línea 132 antes de leer el cuerpo) cuyos headers llegan completos pero el body se envía con un goteo deliberado de bytes.
+
+**Consecuencia:** `leerCuerpo` queda bloqueada esperando `'end'` o `'error'` que nunca terminan. `crearApp` no fija `server.requestTimeout` ni `socket.setTimeout`; en Node.js 22 (versión mínima declarada en `package.json`) el default es 5 minutos. Con suficientes conexiones simultáneas de este estilo, el proceso puede agotar descriptores de archivo antes de que los timeouts venzan. Detrás de Render el proxy filtra esto en producción, pero no hay nada que lo garantice en desarrollo o si el deploy cambia de plataforma.
+
+---
+
+Vale aclarar que la superficie es estrecha: gracias a que el check de autenticación (línea 132) precede a `leerCuerpo` (línea 143), los endpoints protegidos cierran con 401 antes de leer el cuerpo, así que el ataque sólo aplica a `POST /api/acceso`. El resto del código está cuidado: el límite de tamaño funciona bien, el descarte es correcto, el CORS con `Vary: Origin` y el routeo con expresiones regulares fijas no presentan problemas.

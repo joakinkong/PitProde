@@ -71,6 +71,17 @@ function leerCuerpo(req, limiteBytes) {
   });
 }
 
+// Dirección del cliente, para limitar los intentos de contraseña. Detrás del proxy de Render, el proxy agrega la dirección
+// real al FINAL de x-forwarded-for: lo que el cliente escriba antes no cuenta. Sin proxy, la cabecera se ignora porque
+// cualquiera puede falsificarla.
+function direccionCliente(req, confiarProxy) {
+  if (confiarProxy) {
+    const partes = String(req.headers['x-forwarded-for'] || '').split(',').map((p) => p.trim()).filter(Boolean);
+    if (partes.length) return partes[partes.length - 1];
+  }
+  return req.socket.remoteAddress || 'desconocida';
+}
+
 // Cabeceras CORS para el origen de la petición, o {} si ese origen no está permitido.
 // Un navegador solo deja que una página lea la respuesta si la API nombra su dirección.
 function cabecerasCors(origen, origenesPermitidos) {
@@ -93,11 +104,11 @@ function responder(res, estado, cuerpo, extra = {}) {
 }
 
 // Crea el servidor HTTP (sin ponerlo a escuchar) sobre la base "db". "reloj" permite fijar la hora en pruebas.
-function crearApp(db, { reloj = () => new Date(), origenesPermitidos = [], clave = '' } = {}) {
+function crearApp(db, { reloj = () => new Date(), origenesPermitidos = [], clave = '', confiarProxy = false } = {}) {
   const acceso = crearAccesoService({ clave, reloj });
   const rutas = crearRutas(armarControllers(db, reloj, acceso));
 
-  return http.createServer(async (req, res) => {
+  const servidor = http.createServer(async (req, res) => {
     try {
       const url = new URL(req.url, 'http://localhost');
       if (req.method === 'GET' && servirEstatico(url.pathname, res)) return undefined;
@@ -122,6 +133,13 @@ function crearApp(db, { reloj = () => new Date(), origenesPermitidos = [], clave
         return responder(res, 401, { errores: ['Tenés que ingresar como organizador para hacer cambios.'] }, cors);
       }
 
+      let id;
+      try {
+        id = ruta.coincide[1] ? decodeURIComponent(ruta.coincide[1]) : undefined;
+      } catch (error) {
+        return responder(res, 400, { errores: ['La dirección tiene un identificador mal escrito.'] }, cors);
+      }
+
       let body;
       if (METODOS_CON_CUERPO.includes(req.method)) {
         const limite = (ruta.opciones && ruta.opciones.limiteBytes) || LIMITE_CUERPO_BYTES;
@@ -131,10 +149,9 @@ function crearApp(db, { reloj = () => new Date(), origenesPermitidos = [], clave
           return responder(res, 400, { errores: ['El cuerpo no es un JSON válido.'] }, cors);
         }
       }
-      const params = { id: ruta.coincide[1] ? decodeURIComponent(ruta.coincide[1]) : undefined };
+      const params = { id };
       const query = Object.fromEntries(url.searchParams);
-      // Detrás del proxy de Render la dirección real llega en x-forwarded-for.
-      const ip = (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket.remoteAddress;
+      const ip = direccionCliente(req, confiarProxy);
       const { estado, cuerpo } = await ruta.handler({ params, query, body, token, ip });
       return responder(res, estado, cuerpo, cors);
     } catch (error) {
@@ -142,6 +159,10 @@ function crearApp(db, { reloj = () => new Date(), origenesPermitidos = [], clave
       return responder(res, 500, { errores: ['Error interno del servidor.'] }, cabecerasCors(req.headers.origin, origenesPermitidos));
     }
   });
+  // Un cliente que manda los encabezados y después gotea el cuerpo no puede dejar conexiones abiertas para siempre.
+  servidor.headersTimeout = 15000;
+  servidor.requestTimeout = 30000;
+  return servidor;
 }
 
 module.exports = { crearApp };

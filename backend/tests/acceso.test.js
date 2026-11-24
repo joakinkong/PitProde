@@ -5,14 +5,15 @@ const { describe, test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const { abrirBase } = require('../src/db.js');
 const { crearApp } = require('../src/app.js');
+const { crearAccesoService } = require('../src/services/acceso.service.js');
 
 const CLAVE = 'clave-segura-123';
 const NUEVO_JUGADOR = { nombre: 'Ana' };
 
 // Levanta un servidor con (o sin) contraseña y un reloj que se puede mover.
-async function levantar(clave) {
+async function levantar(clave, { confiarProxy = true } = {}) {
   const reloj = { ahora: new Date('2026-03-01T10:00:00Z') };
-  const servidor = crearApp(await abrirBase(':memory:'), { reloj: () => reloj.ahora, clave });
+  const servidor = crearApp(await abrirBase(':memory:'), { reloj: () => reloj.ahora, clave, confiarProxy });
   await new Promise((resolver) => servidor.listen(0, '127.0.0.1', resolver));
   const base = `http://127.0.0.1:${servidor.address().port}`;
   const pedir = async (metodo, ruta, cuerpo, token, ip) => {
@@ -93,6 +94,58 @@ describe('con contraseña', () => {
     t.reloj.ahora = new Date('2026-03-01T10:16:00Z');
     assert.equal((await t.pedir('POST', '/api/acceso', { clave: CLAVE }, undefined, ip)).estado, 200);
     t.reloj.ahora = new Date('2026-03-01T10:00:00Z');
+  });
+});
+
+describe('la dirección del cliente no se puede falsificar', () => {
+  test('detrás del proxy cuenta la última dirección de x-forwarded-for: lo que escribe el cliente antes no sirve', async () => {
+    const t = await levantar(CLAVE, { confiarProxy: true });
+    for (let i = 0; i < 5; i += 1) {
+      // el atacante cambia el primer valor en cada intento; el proxy siempre agrega la dirección real al final
+      assert.equal((await t.pedir('POST', '/api/acceso', { clave: 'mal' }, undefined, `1.1.1.${i}, 9.9.9.9`)).estado, 401);
+    }
+    assert.equal((await t.pedir('POST', '/api/acceso', { clave: CLAVE }, undefined, '2.2.2.2, 9.9.9.9')).estado, 429);
+    await t.cerrar();
+  });
+
+  test('sin proxy la cabecera se ignora: cambiarla no evita el bloqueo', async () => {
+    const t = await levantar(CLAVE, { confiarProxy: false });
+    for (let i = 0; i < 5; i += 1) {
+      assert.equal((await t.pedir('POST', '/api/acceso', { clave: 'mal' }, undefined, `3.3.3.${i}`)).estado, 401);
+    }
+    assert.equal((await t.pedir('POST', '/api/acceso', { clave: CLAVE }, undefined, '4.4.4.4')).estado, 429);
+    await t.cerrar();
+  });
+
+  test('los fallos sueltos se olvidan con el tiempo: 4 fallos, 16 minutos, y un fallo más no bloquea', async () => {
+    const t = await levantar(CLAVE);
+    const ip = '10.1.1.1';
+    for (let i = 0; i < 4; i += 1) await t.pedir('POST', '/api/acceso', { clave: 'mal' }, undefined, ip);
+    t.reloj.ahora = new Date('2026-03-01T10:16:00Z');
+    assert.equal((await t.pedir('POST', '/api/acceso', { clave: 'mal' }, undefined, ip)).estado, 401); // el contador volvió a 1
+    assert.equal((await t.pedir('POST', '/api/acceso', { clave: CLAVE }, undefined, ip)).estado, 200);
+    await t.cerrar();
+  });
+});
+
+describe('límites de memoria y de tiempo', () => {
+  test('al llegar al tope de direcciones recordadas se descarta primero a las que no están bloqueadas', async () => {
+    const reloj = { ahora: new Date('2026-03-01T10:00:00Z') };
+    const servicio = crearAccesoService({ clave: CLAVE, reloj: () => reloj.ahora, maxDirecciones: 3 });
+    for (let i = 0; i < 5; i += 1) servicio.ingresar({ clave: 'mal' }, 'bloqueada'); // llega al bloqueo
+    servicio.ingresar({ clave: 'mal' }, 'b');
+    servicio.ingresar({ clave: 'mal' }, 'c');
+    servicio.ingresar({ clave: 'mal' }, 'd'); // el mapa se llena: se descarta a "b", no a la bloqueada
+    const r = servicio.ingresar({ clave: CLAVE }, 'bloqueada');
+    assert.equal(r.ok, false);
+    assert.equal(r.motivo, 'bloqueado');
+  });
+
+  test('el servidor corta a quien deja el cuerpo a medias: hay tiempos máximos configurados', async () => {
+    const servidor = crearApp(await abrirBase(':memory:'), {});
+    assert.equal(servidor.headersTimeout, 15000);
+    assert.equal(servidor.requestTimeout, 30000);
+    servidor.close();
   });
 });
 

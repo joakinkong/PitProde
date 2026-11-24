@@ -1,0 +1,15 @@
+---
+
+**Media** `acceso.service.js:54` — `ip` sin restricción de formato usada como clave compartida del rate-limiter
+Entrada: `app.js::direccionCliente` retorna `'desconocida'` cuando el socket no tiene `remoteAddress` y no hay header `x-forwarded-for` (el fallback explícito en `app.js:82`). El service acepta ese valor sin validación y lo usa como clave de `intentos`.
+Consecuencia: 5 intentos fallidos de cualquier cliente que comparta esa clave bloquean por 15 minutos a todos los que caigan en el mismo bucket — incluyendo al organizador legítimo, que pierde acceso sin haber fallado él mismo.
+
+---
+
+**Baja** `acceso.service.js:39` — el `while` de evicción puede descartar IPs aún activamente bloqueadas
+Entrada: más de `MAX_DIRECCIONES` (10 000) IPs únicas distintas conectándose dentro de la ventana de bloqueo (15 minutos). Cuando `limpiarVencidos` no libera entradas porque ninguna venció, el `while` borra la más vieja sin verificar si su `hasta` todavía está en el futuro.
+Consecuencia: una IP bloqueada puede quedar desbloqueada antes de que venza su castigo, recuperando su contador limpio; con suficientes IPs de rotación, el rate-limiting queda anulado.
+
+---
+
+Dos hallazgos. Los demás patrones revisados (comparación de contraseña con `timingSafeEqual` sobre SHA-256, formato del token, regex de validación, límite de cuerpo heredado de `app.js`) no presentan problemas concretos en este archivo.

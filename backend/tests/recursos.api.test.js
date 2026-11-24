@@ -156,6 +156,17 @@ for (const { nombre, abrir } of BASES) {
       });
     });
 
+    describe('direcciones mal escritas', () => {
+      test('un identificador con un % mal escrito da 400 y no 500', async () => {
+        for (const ruta of ['/api/jugadores/%ZZ', '/api/pilotos/%', '/api/pronosticos/%E0%A4%A']) {
+          const metodo = ruta.includes('pronosticos') ? 'GET' : 'PUT';
+          const r = await pedir(metodo, ruta, metodo === 'PUT' ? { nombre: 'x' } : undefined);
+          assert.equal(r.estado, 400, ruta);
+          assert.match(r.cuerpo.errores[0], /identificador mal escrito/);
+        }
+      });
+    });
+
     describe('reglas de borde', () => {
       test('RN1, RN5 y RN8: se respetan los topes de largo', async () => {
         assert.equal((await pedir('POST', '/api/jugadores', { nombre: 'x'.repeat(31) })).estado, 422);

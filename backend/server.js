@@ -26,7 +26,7 @@ async function iniciar() {
     process.exit(1);
   }
   const { db, descripcion } = await abrirSegunConfig(config);
-  const servidor = crearApp(db, { origenesPermitidos: config.origenesPermitidos, clave: config.clave });
+  const servidor = crearApp(db, { origenesPermitidos: config.origenesPermitidos, clave: config.clave, confiarProxy: !config.esLocal });
   servidor.listen(config.puerto, config.host, () => {
     console.log(`PitProde backend en http://${config.host}:${config.puerto} · base: ${descripcion}`);
     if (!config.clave) console.log('Sin ORGANIZER_PASSWORD: cualquiera que llegue a este puerto puede escribir (solo seguro en tu PC).');

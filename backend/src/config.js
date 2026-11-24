@@ -11,7 +11,7 @@ function leerConfig(env = process.env) {
   const host = env.HOST || '127.0.0.1';
   const config = {
     host,
-    puerto: Number(env.PORT) || 3000,
+    puerto: env.PORT === undefined || env.PORT === '' ? 3000 : Number(env.PORT),
     databaseUrl: env.DATABASE_URL || '',
     rutaSqlite: env.PITPRODE_DB || path.join(__dirname, '..', 'datos', 'pitprode.sqlite'),
     // Direcciones del frontend que pueden pedirle cosas a la API (CORS), separadas por comas.
@@ -26,6 +26,10 @@ function leerConfig(env = process.env) {
   }
   if (config.clave && config.clave.length < 8) errores.push('ORGANIZER_PASSWORD tiene que tener al menos 8 caracteres.');
   if (!Number.isInteger(config.puerto) || config.puerto < 1 || config.puerto > 65535) errores.push('PORT no es un puerto válido.');
+  // No se muestra el valor: la cadena de conexión es un secreto.
+  if (config.databaseUrl && !/^postgres(ql)?:\/\//.test(config.databaseUrl)) {
+    errores.push('DATABASE_URL tiene que ser una cadena de conexión que empiece con postgresql://');
+  }
   return { config, errores };
 }
 

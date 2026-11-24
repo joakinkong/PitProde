@@ -1,0 +1,11 @@
+---
+
+**Baja** `config.js:14` — `PORT` inválido o cero se descarta sin aviso
+Entrada: `PORT=xyz` (cualquier valor no numérico) o `PORT=0`. `Number('xyz')` produce `NaN`, y `0` y `NaN` son falsy: ambos caen en el `|| 3000` antes de llegar a la validación de línea 28, que evalúa `config.puerto` ya convertido a 3000. El error no se agrega a `errores[]`.
+Consecuencia: el servidor arranca en el 3000 sin avisarle al operador que su `PORT` fue ignorado. En un deploy donde el 3000 estaba libre por casualidad, el operador no se entera de la confusión; en el que no, el proceso muere con `EADDRINUSE` sin indicar la causa real.
+
+---
+
+**Baja** `config.js:15` — `DATABASE_URL` acepta cualquier string sin validación de formato
+Entrada: `DATABASE_URL=http://algo` u otro string no vacío pero no válido como URI de Postgres.
+Consecuencia: `abrirSegunConfig` en `server.js` crea un `Pool` con ese string y el error llega del driver `pg` al momento de conectar, no de la validación de config. El arranque igual falla (`process.exit(1)`), pero el mensaje de error proviene de las entrañas del driver y es más difícil de relacionar con un valor mal seteado en la variable de entorno.

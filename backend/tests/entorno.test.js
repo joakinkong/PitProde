@@ -33,9 +33,18 @@ describe('configuración', () => {
     assert.deepEqual(config.origenesPermitidos, ['https://a.netlify.app', 'http://localhost:5173']);
   });
 
-  test('un PORT inválido se rechaza y DATABASE_URL se toma tal cual', () => {
-    assert.match(leerConfig({ PORT: '99999' }).errores[0], /PORT/);
-    assert.equal(leerConfig({ DATABASE_URL: 'postgres://x' }).config.databaseUrl, 'postgres://x');
+  test('un PORT inválido se rechaza (no se ignora en silencio) y uno vacío usa 3000', () => {
+    for (const malo of ['99999', 'abc', '0', '-1', '30.5']) assert.match(leerConfig({ PORT: malo }).errores[0], /PORT/, malo);
+    assert.equal(leerConfig({ PORT: '10000' }).config.puerto, 10000);
+    assert.equal(leerConfig({ PORT: '' }).config.puerto, 3000);
+  });
+
+  test('DATABASE_URL tiene que parecer una cadena de Postgres, y el error no muestra su valor (es un secreto)', () => {
+    assert.deepEqual(leerConfig({ DATABASE_URL: 'postgresql://usuario:clave@host/db?sslmode=require' }).errores, []);
+    assert.deepEqual(leerConfig({ DATABASE_URL: 'postgres://x' }).errores, []);
+    const { errores } = leerConfig({ DATABASE_URL: 'http://usuario:SECRETO@host' });
+    assert.match(errores[0], /DATABASE_URL/);
+    assert.doesNotMatch(errores[0], /SECRETO/);
   });
 });
 

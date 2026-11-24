@@ -1,0 +1,17 @@
+---
+
+**Media** `db.js:142–147` — `prepararDatos` no está envuelta en una transacción
+Entrada: dos procesos del servidor Postgres arrancando simultáneamente contra una base vacía (cold start con dos réplicas, o reinicio por falla en el medio de un despliegue).
+Consecuencia: ambas instancias pasan el chequeo de semilla, ambas ven `COUNT(*) = 0` y llaman `cargarDatosIniciales`. La segunda falla con una violación de clave primaria al insertar el primer piloto — `transaccion` hace ROLLBACK, el error escala hasta `iniciar().catch(process.exit(1))` y esa instancia no levanta. Si las dos arrancaron al mismo tiempo, el servicio no queda en pie.
+
+---
+
+**Baja** `db.js:92–95` — `aPostgres` reemplaza `?` sin distinguir literales de texto
+Entrada: cualquier SQL que en el futuro incluya un `?` dentro de una cadena literal (ej. `WHERE descripcion LIKE '?%'` o un mensaje de error hardcodeado).
+Consecuencia: el `?` se convierte en `$N`, la query queda malformada y falla en tiempo de ejecución. Hoy ningún repository lo hace, pero la función no tiene protección y el comentario lo deja como contrato implícito entre archivos ("el SQL de los repositories no tiene '?' dentro de textos"), lo que es frágil a medida que el código crezca.
+
+---
+
+**Baja** `db.js:65` — el adaptador SQLite expone `bd` (el `DatabaseSync` crudo) como propiedad pública
+Entrada: cualquier código que reciba el adaptador y llame directamente `db.bd.exec(sql)` o `db.bd.prepare(sql).run(entrada_del_usuario)`.
+Consecuencia: las llamadas directas al `DatabaseSync` saltean por completo la capa de parámetros (`preparar(sql).run(...params)`), abriendo la puerta a inyección SQL si alguna vez llega input externo por esa vía. Hoy `db.bd` solo se usa dentro del mismo `db.js` (línea 161, SQL fijo), pero la propiedad es pública y no hay nada que impida que otra capa la use.

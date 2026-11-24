@@ -1,0 +1,19 @@
+Leí los archivos relacionados (`routes.js`, `acceso.service.js`, `estaticos.js`) para tener contexto. Los reporto solo como lectura; los hallazgos son únicamente de `app.js`.
+
+---
+
+**Alta** `app.js:137` — `X-Forwarded-For` falsificable, bypass del rate-limiting
+Entrada: cualquier cliente envía `X-Forwarded-For: 127.0.0.1` (u otra IP arbitraria) en cada petición a `POST /api/acceso`. CORS no protege contra curl ni herramientas similares.
+Consecuencia: `acceso.service.js` bloquea por IP después de 5 fallos; con la IP forjada el atacante cambia de dirección en cada intento y puede hacer fuerza bruta sin límite sobre la clave del organizador. Si la obtiene, puede crear, modificar o borrar todos los datos del prode.
+
+---
+
+**Media** `app.js:134` — `decodeURIComponent` sin try/catch propio
+Entrada: un cliente pide `PUT /api/jugadores/%ZZ` (secuencia `%XX` con caracteres inválidos); `new URL` preserva el segmento tal cual en `pathname` y `decodeURIComponent` lanza `URIError`.
+Consecuencia: la excepción la atrapa el `try/catch` del servidor (línea 140) y responde 500 en lugar de 400. El servidor sobrevive, pero el cliente recibe un error de servidor por un input que es responsabilidad suya.
+
+---
+
+**Baja** `app.js:135` — `Object.fromEntries` descarta valores duplicados en query string
+Entrada: una petición llega con `?id=1&id=2`; `Object.fromEntries(url.searchParams)` conserva solo el último valor (`{ id: '2' }`).
+Consecuencia: si algún handler espera múltiples valores para un mismo parámetro (p. ej. filtrar por varios IDs), el comportamiento es silenciosamente incorrecto sin ningún error visible. Hoy los handlers existentes no parecen requerirlo, pero la puerta queda abierta.
