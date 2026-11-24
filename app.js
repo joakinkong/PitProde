@@ -1,5 +1,6 @@
 // app.js — interfaz y eventos de PitProde.
-// Acá no hay cálculo de puntos (eso vive en scoring.js) ni acceso directo a localStorage (storage.js).
+// Los datos viven en el servidor: acá no se calculan puntos ni se guarda nada en el navegador;
+// cada cambio se manda a la API (api.js) y después se vuelven a pedir los datos al servidor.
 'use strict';
 
 const NOMBRES_ESTADO = { proximo: 'Próximo', cerrado: 'Cerrado', finalizado: 'Finalizado' };
@@ -11,8 +12,9 @@ const PRONOSTICO_VACIO = { jugadorId: '', gpId: '', p1: '', p2: '', p3: '', pole
 
 // Estado de la interfaz (los datos del prode están en estado.datos).
 const estado = {
-  datos: null,
-  persistente: true,
+  datos: { jugadores: [], pilotos: [], grandesPremios: [], pronosticos: [] },
+  tabla: [], // tabla de posiciones calculada por el servidor
+  conectado: true,
   pestana: 'tabla',
   editando: { jugadores: null, pilotos: null, grandesPremios: null }, // id del registro en edición
   resultadoGpId: null, // GP al que se le está cargando el resultado
@@ -133,20 +135,41 @@ function buscarPronostico(jugadorId, gpId) {
   return estado.datos.pronosticos.find((p) => p.jugadorId === jugadorId && p.gpId === gpId);
 }
 
-// Guarda en localStorage; si falla, avisa en pantalla.
-function persistir() {
-  const resultado = guardarDatos(estado.datos);
-  if (!resultado.ok) avisar(resultado.error, 'error');
+// Pide al servidor todos los datos y la tabla. Devuelve false (y avisa) si no se pudo.
+async function recargar() {
+  const [datos, tabla] = await Promise.all([API.pedir('GET', '/datos'), API.pedir('GET', '/tabla')]);
+  if (!datos.ok || !tabla.ok) {
+    estado.conectado = false;
+    render();
+    avisar((datos.ok ? tabla : datos).errores[0], 'error');
+    return false;
+  }
+  estado.datos = datos.datos;
+  estado.tabla = tabla.datos;
+  estado.conectado = true;
+  return true;
 }
 
-// Cambia los datos completos (importar, reiniciar) y limpia lo que quedaba a medias.
-function reemplazarDatos(datos) {
-  estado.datos = datos;
+// Manda un cambio al servidor y, si salió bien, recarga los datos. Devuelve la respuesta o null si falló:
+// los errores se muestran en "caja" (la del formulario) o, si no hay, como aviso arriba.
+async function aplicar(metodo, ruta, cuerpo, caja) {
+  const respuesta = await API.pedir(metodo, ruta, cuerpo);
+  document.getElementById('banner-conexion').hidden = !respuesta.sinConexion;
+  if (!respuesta.ok) {
+    if (caja) pintarErrores(caja, respuesta.errores);
+    else avisar(respuesta.errores.join(' '), 'error');
+    return null;
+  }
+  if (caja) pintarErrores(caja, []);
+  await recargar();
+  return respuesta;
+}
+
+// Limpia lo que quedaba a medias en pantalla (edición, resultado y borrador) después de reemplazar todos los datos.
+function limpiarEdicion() {
   estado.editando = { jugadores: null, pilotos: null, grandesPremios: null };
   estado.resultadoGpId = null;
   estado.borradorPronostico = { ...PRONOSTICO_VACIO };
-  persistir();
-  render();
 }
 
 const etiquetaEstado = (gp) => {
@@ -159,12 +182,11 @@ const textoPodio = (r) => `P1 ${codigoPiloto(r.p1)} · P2 ${codigoPiloto(r.p2)} 
 // ---------- Tabla de posiciones ----------
 
 function vistaTabla() {
-  const { jugadores, pronosticos, grandesPremios } = estado.datos;
-  if (!jugadores.length) {
+  if (!estado.datos.jugadores.length) {
     return el('section', {}, el('h2', { text: 'Tabla de posiciones' }),
       el('p', { class: 'vacio', text: 'Todavía no hay jugadores. Agregalos en la pestaña Jugadores.' }));
   }
-  const filas = calcularTabla(jugadores, pronosticos, grandesPremios).map((fila) => el(
+  const filas = estado.tabla.map((fila) => el(
     'tr', {},
     el('td', { text: fila.posicion }),
     el('td', {}, el('span', { class: 'punto-color', style: `background:${fila.jugador.color}` }),
@@ -223,16 +245,15 @@ function vistaEntidad(cfg) {
   return el('section', {}, form, cfg.filtros ? cfg.filtros(pintar) : null, lista);
 }
 
-function guardarEntidad(cfg, existente, controles, caja) {
+async function guardarEntidad(cfg, existente, controles, caja) {
   const valores = {};
   cfg.campos.forEach((campo) => { valores[campo.n] = leerControl(campo, controles[campo.n]); });
   const errores = cfg.validar(valores, estado.datos, existente);
   pintarErrores(caja, errores);
   if (errores.length) return;
-  if (existente) Object.assign(existente, valores);
-  else estado.datos[cfg.clave].push(cfg.crear(valores));
+  const ruta = existente ? `/${cfg.ruta}/${existente.id}` : `/${cfg.ruta}`;
+  if (!await aplicar(existente ? 'PUT' : 'POST', ruta, valores, caja)) return;
   estado.editando[cfg.clave] = null;
-  persistir();
   render();
   avisar(`Se guardó: ${valores.nombre}.`);
 }
@@ -254,16 +275,16 @@ function pintarListaEntidad(cfg, contenedor) {
 }
 
 // Borra un registro pidiendo confirmación y avisando qué se pierde con él.
-function borrarEntidad(cfg, item) {
+async function borrarEntidad(cfg, item) {
   const impacto = cfg.impactoBorrado(item, estado.datos);
   if (impacto.bloqueo) {
     avisar(impacto.bloqueo, 'error');
     return;
   }
   if (!window.confirm(impacto.aviso)) return;
-  cfg.borrar(estado.datos, item);
+  if (!await aplicar('DELETE', `/${cfg.ruta}/${item.id}`)) return;
   if (estado.editando[cfg.clave] === item.id) estado.editando[cfg.clave] = null;
-  persistir();
+  if (cfg.clave === 'grandesPremios' && estado.resultadoGpId === item.id) estado.resultadoGpId = null;
   render();
   avisar('Se eliminó correctamente.');
 }
@@ -273,13 +294,13 @@ const avisoConPronosticos = (nombre, cantidad) => (
   `¿Borrar a "${nombre}"? También se van a borrar sus ${cantidad} pronóstico(s). No se puede deshacer.`
 );
 
-const quitar = (lista, item) => lista.splice(lista.indexOf(item), 1);
 const porNombre = (a, b) => a.nombre.localeCompare(b.nombre, 'es');
 const campoTexto = (n, et, max) => ({ n, et, tipo: 'text', max });
 
 const ENTIDADES = {
   jugadores: {
     clave: 'jugadores',
+    ruta: 'jugadores',
     singular: 'jugador',
     campos: [campoTexto('nombre', 'Nombre', 30), campoTexto('apodo', 'Apodo (opcional)', 20), { n: 'color', et: 'Color en la tabla', tipo: 'color', def: '#e10600' }],
     vacio: 'Todavía no hay jugadores.',
@@ -289,7 +310,6 @@ const ENTIDADES = {
       const repetido = datos.jugadores.some((j) => j !== existente && j.nombre.toLowerCase() === v.nombre.toLowerCase());
       return repetido ? ['Ya existe un jugador con ese nombre.'] : [];
     },
-    crear: (v) => ({ id: generarId(), ...v, fechaAlta: new Date().toISOString() }),
     info: (j) => [
       el('strong', {}, el('span', { class: 'punto-color', style: `background:${j.color}` }), j.nombre),
       j.apodo ? el('div', { class: 'secundario', text: `Apodo: ${j.apodo}` }) : null,
@@ -297,14 +317,11 @@ const ENTIDADES = {
     impactoBorrado: (j, datos) => ({
       aviso: avisoConPronosticos(j.nombre, datos.pronosticos.filter((p) => p.jugadorId === j.id).length),
     }),
-    borrar: (datos, j) => {
-      quitar(datos.jugadores, j);
-      datos.pronosticos = datos.pronosticos.filter((p) => p.jugadorId !== j.id);
-    },
   },
 
   pilotos: {
     clave: 'pilotos',
+    ruta: 'pilotos',
     singular: 'piloto',
     campos: [
       campoTexto('nombre', 'Nombre', 40), campoTexto('equipo', 'Equipo', 30),
@@ -320,7 +337,6 @@ const ENTIDADES = {
       if (!Number.isInteger(v.numero) || v.numero < 0 || v.numero > 99) errores.push('El número tiene que ser un entero entre 0 y 99.');
       return errores;
     },
-    crear: (v) => ({ id: generarId(), ...v }),
     info: (p) => [
       el('strong', { text: `#${p.numero} ${p.nombre}` }),
       el('div', { class: 'secundario', text: p.equipo }),
@@ -334,11 +350,11 @@ const ENTIDADES = {
       }
       return { aviso: `¿Borrar a "${p.nombre}" de la grilla?` };
     },
-    borrar: (datos, p) => quitar(datos.pilotos, p),
   },
 
   grandesPremios: {
     clave: 'grandesPremios',
+    ruta: 'grandes-premios',
     singular: 'Gran Premio',
     campos: [
       campoTexto('nombre', 'Nombre', 50), campoTexto('circuito', 'Circuito', 50),
@@ -368,7 +384,6 @@ const ENTIDADES = {
       }
       return errores;
     },
-    crear: (v) => ({ id: generarId(), ...v, resultado: null }),
     info: (gp) => [
       el('strong', { text: gp.nombre }),
       el('div', { class: 'secundario', text: `${gp.circuito} · ${formatearFecha(gp.fechaLargada)}` }),
@@ -378,11 +393,6 @@ const ENTIDADES = {
     impactoBorrado: (gp, datos) => ({
       aviso: avisoConPronosticos(gp.nombre, datos.pronosticos.filter((p) => p.gpId === gp.id).length),
     }),
-    borrar: (datos, gp) => {
-      quitar(datos.grandesPremios, gp);
-      datos.pronosticos = datos.pronosticos.filter((p) => p.gpId !== gp.id);
-      if (estado.resultadoGpId === gp.id) estado.resultadoGpId = null;
-    },
   },
 };
 
@@ -415,18 +425,18 @@ function vistaPanelResultado() {
     selects[pos] = crearSelect(opcionesPilotos(false), actual[pos] || '', 'Elegí piloto');
     return crearCampo(etiqueta, selects[pos]);
   });
-  const guardar = (e) => {
+  const guardar = async (e) => {
     e.preventDefault();
     const entrada = Object.fromEntries(Object.entries(selects).map(([pos, select]) => [pos, select.value]));
     const errores = validarResultado(entrada, gp, estado.datos.pilotos, ahora());
     pintarErrores(caja, errores);
     if (errores.length) return;
-    gp.resultado = entrada;
+    if (!await aplicar('PUT', `/grandes-premios/${gp.id}/resultado`, entrada, caja)) return;
     cerrarResultado(`Resultado de ${gp.nombre} guardado. Los puntos se recalcularon.`);
   };
-  const quitarResultado = () => {
+  const quitarResultado = async () => {
     if (!window.confirm('¿Quitar el resultado? Los pronósticos de este GP vuelven a quedar sin puntos.')) return;
-    gp.resultado = null;
+    if (!await aplicar('DELETE', `/grandes-premios/${gp.id}/resultado`)) return;
     cerrarResultado('Resultado quitado.');
   };
   return el(
@@ -440,11 +450,9 @@ function vistaPanelResultado() {
   );
 }
 
-// Cierra el panel, recalcula los puntos de todos los pronósticos y guarda.
+// Cierra el panel de resultado (los puntos ya los recalculó el servidor).
 function cerrarResultado(mensaje) {
-  estado.datos.pronosticos = recalcularPuntos(estado.datos);
   estado.resultadoGpId = null;
-  persistir();
   render();
   avisar(mensaje);
 }
@@ -503,18 +511,18 @@ function cargarPronosticoExistente(controles, nota) {
   nota.textContent = textoPronosticoExistente(controles.jugadorId.value, controles.gpId.value);
 }
 
-function guardarPronostico(controles, caja) {
+async function guardarPronostico(controles, caja) {
   const entrada = Object.fromEntries(Object.entries(controles).map(([clave, select]) => [clave, select.value]));
   const errores = validarPronostico(entrada, estado.datos, ahora());
   pintarErrores(caja, errores);
   if (errores.length) return;
-  const fechaCarga = new Date().toISOString();
   const existente = buscarPronostico(entrada.jugadorId, entrada.gpId);
-  if (existente) Object.assign(existente, entrada, { fechaCarga });
-  else estado.datos.pronosticos.push({ id: generarId(), ...entrada, fechaCarga, puntos: null, favorito: false });
+  const respuesta = existente
+    ? await aplicar('PUT', `/pronosticos/${existente.id}`, { p1: entrada.p1, p2: entrada.p2, p3: entrada.p3, pole: entrada.pole }, caja)
+    : await aplicar('POST', '/pronosticos', entrada, caja);
+  if (!respuesta) return;
   // Se deja el GP elegido para cargar rápido el pronóstico del siguiente jugador.
   estado.borradorPronostico = { ...PRONOSTICO_VACIO, gpId: entrada.gpId };
-  persistir();
   render();
   avisar(`Pronóstico de ${buscar(estado.datos.jugadores, entrada.jugadorId).nombre} guardado.`);
 }
@@ -573,7 +581,7 @@ function tarjetaPronostico(pronostico, pintar) {
       el('div', { class: 'podio' }, podio),
       pronostico.puntos === null ? null : el('div', { class: 'puntos', text: `${pronostico.puntos} punto(s)` })),
     el('div', { class: 'acciones' },
-      boton(pronostico.favorito ? '★' : '☆', () => { pronostico.favorito = !pronostico.favorito; persistir(); pintar(); }, 'btn-estrella', {
+      boton(pronostico.favorito ? '★' : '☆', () => alternarFavorito(pronostico, pintar), 'btn-estrella', {
         'aria-pressed': String(pronostico.favorito), 'aria-label': 'Marcar como favorito',
       }),
       bloqueado
@@ -589,10 +597,20 @@ function editarPronostico(pronostico) {
   window.scrollTo(0, 0);
 }
 
-function borrarPronostico(pronostico) {
+// Marca o desmarca el favorito en el servidor y actualiza solo esa tarjeta.
+async function alternarFavorito(pronostico, pintar) {
+  const respuesta = await API.pedir('PATCH', `/pronosticos/${pronostico.id}/favorito`, { favorito: !pronostico.favorito });
+  if (!respuesta.ok) {
+    avisar(respuesta.errores.join(' '), 'error');
+    return;
+  }
+  pronostico.favorito = respuesta.datos.favorito;
+  pintar();
+}
+
+async function borrarPronostico(pronostico) {
   if (!window.confirm('¿Borrar este pronóstico?')) return;
-  quitar(estado.datos.pronosticos, pronostico);
-  persistir();
+  if (!await aplicar('DELETE', `/pronosticos/${pronostico.id}`)) return;
   render();
   avisar('Pronóstico eliminado.');
 }
@@ -609,12 +627,18 @@ function descargarArchivo(nombre, texto) {
   URL.revokeObjectURL(url);
 }
 
-function exportarArchivo() {
-  descargarArchivo(`pitprode-${new Date().toISOString().slice(0, 10)}.json`, exportarDatos(estado.datos));
+async function exportarArchivo() {
+  const respuesta = await API.pedir('GET', '/exportar');
+  if (!respuesta.ok) {
+    avisar(respuesta.errores.join(' '), 'error');
+    return;
+  }
+  descargarArchivo(`pitprode-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify(respuesta.datos, null, 2));
   avisar('Backup descargado.');
 }
 
-// Importa un archivo JSON. Si está roto o no es válido, no se toca nada de lo guardado.
+// Importa un archivo JSON. Se revisa acá para dar el aviso enseguida y el servidor lo vuelve a validar:
+// si está roto o no es válido, no se toca nada de lo guardado.
 async function importarArchivo(archivo, caja) {
   let texto;
   try {
@@ -630,7 +654,9 @@ async function importarArchivo(archivo, caja) {
   }
   pintarErrores(caja, []);
   if (!window.confirm('Importar va a reemplazar todos los datos actuales por los del archivo. ¿Seguimos?')) return;
-  reemplazarDatos(resultado.datos);
+  if (!await aplicar('POST', '/importar', JSON.parse(texto), caja)) return;
+  limpiarEdicion();
+  render();
   avisar('Datos importados correctamente.');
 }
 
@@ -642,9 +668,11 @@ function vistaDatos() {
     if (entrada.files[0]) await importarArchivo(entrada.files[0], caja);
     entrada.value = '';
   });
-  const reiniciar = (texto, crearNuevos, mensaje) => () => {
+  const reiniciar = (texto, crearNuevos, mensaje) => async () => {
     if (!window.confirm(texto)) return;
-    reemplazarDatos(crearNuevos());
+    if (!await aplicar('POST', '/importar', crearNuevos())) return;
+    limpiarEdicion();
+    render();
     avisar(mensaje);
   };
   return el(
@@ -652,7 +680,7 @@ function vistaDatos() {
     el('h2', { text: 'Datos y backup' }),
     el('div', { class: 'tarjeta' },
       el('p', { text: `${jugadores.length} jugadores · ${pilotos.length} pilotos · ${grandesPremios.length} GPs · ${pronosticos.length} pronósticos.` }),
-      el('p', { class: 'nota', text: 'Los datos viven solo en este navegador. Exportá un JSON de vez en cuando como backup o para pasarle el prode a otro organizador.' }),
+      el('p', { class: 'nota', text: 'Los datos se guardan en el servidor (archivo backend/datos/pitprode.sqlite). Exportá un JSON de vez en cuando como backup o para pasarle el prode a otro organizador.' }),
       el('div', { class: 'acciones' }, boton('Exportar JSON', exportarArchivo, 'btn-primario'))),
     el('div', { class: 'tarjeta' },
       el('h2', { text: 'Importar' }),
@@ -689,19 +717,16 @@ function render() {
     if (pestana.dataset.pestana === estado.pestana) pestana.setAttribute('aria-current', 'page');
     else pestana.removeAttribute('aria-current');
   });
-  document.getElementById('banner-persistencia').hidden = estado.persistente;
+  document.getElementById('banner-conexion').hidden = estado.conectado;
   document.getElementById('vista').replaceChildren(VISTAS[estado.pestana]());
 }
 
-function iniciar() {
-  const carga = cargarDatos();
-  estado.datos = carga.datos;
-  estado.persistente = carga.persistente;
+async function iniciar() {
   document.getElementById('navegacion').replaceChildren(...PESTANAS.map(([clave, texto]) => (
     el('button', { type: 'button', class: 'pestana', 'data-pestana': clave, text: texto, onclick: () => cambiarPestana(clave) })
   )));
   render();
-  if (carga.aviso) avisar(carga.aviso, 'error');
+  if (await recargar()) render();
 }
 
 document.addEventListener('DOMContentLoaded', iniciar);

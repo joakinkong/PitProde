@@ -14,15 +14,16 @@
 
   <!-- Avisos y errores globales -->
   <div id="mensajes" class="mensajes" aria-live="polite"></div>
-  <p id="banner-persistencia" class="banner-persistencia" role="alert" hidden>
-    Los datos no se están guardando en este navegador. Exportá un JSON para no perderlos.
+  <p id="banner-conexion" class="banner-persistencia" role="alert" hidden>
+    No hay conexión con el servidor. Los cambios no se están guardando: abrí esta página desde el servidor (node backend/server.js).
   </p>
 
   <main id="vista" class="vista"></main>
 
-  <!-- Orden de carga: primero los datos, después la lógica de puntos y por último la interfaz -->
+  <!-- Orden de carga: formato de datos, reglas del prode, cliente de la API y por último la interfaz -->
   <script src="storage.js"></script>
   <script src="scoring.js"></script>
+  <script src="api.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
