@@ -17,6 +17,8 @@ function crearPronosticosRepository(db) {
     (id, jugador_id, gp_id, p1, p2, p3, pole, fecha_carga) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`);
   const actualizar = db.prepare('UPDATE pronosticos SET p1 = ?, p2 = ?, p3 = ?, pole = ?, fecha_carga = ? WHERE id = ?');
   const porId = db.prepare('SELECT * FROM pronosticos WHERE id = ?');
+  const borrar = db.prepare('DELETE FROM pronosticos WHERE id = ?');
+  const ponerFavorito = db.prepare('UPDATE pronosticos SET favorito = ? WHERE id = ?');
   const porJugadorYGP = db.prepare('SELECT * FROM pronosticos WHERE jugador_id = ? AND gp_id = ?');
   // Los filtros son opcionales: "? IS NULL OR campo = ?" evita armar el SQL con texto.
   const listar = db.prepare(`SELECT * FROM pronosticos
@@ -32,6 +34,13 @@ function crearPronosticosRepository(db) {
     // Cambia el podio, la pole y la fecha de carga. Devuelve el pronóstico actualizado.
     actualizar: (id, { p1, p2, p3, pole, fechaCarga }) => {
       actualizar.run(p1, p2, p3, pole, fechaCarga, id);
+      return filaAPronostico(porId.get(id));
+    },
+    // Borra el pronóstico.
+    eliminar: (id) => { borrar.run(id); },
+    // Marca o desmarca el favorito. Devuelve el pronóstico actualizado.
+    ponerFavorito: (id, valor) => {
+      ponerFavorito.run(valor ? 1 : 0, id);
       return filaAPronostico(porId.get(id));
     },
     // Devuelve el pronóstico o undefined si no existe.

@@ -5,7 +5,9 @@
 const { describe, test, beforeEach } = require('node:test');
 const assert = require('node:assert/strict');
 const { abrirBase } = require('../src/db.js');
-const { crearReferenciasRepository } = require('../src/repositories/referencias.repository.js');
+const { crearJugadoresRepository } = require('../src/repositories/jugadores.repository.js');
+const { crearPilotosRepository } = require('../src/repositories/pilotos.repository.js');
+const { crearGrandesPremiosRepository } = require('../src/repositories/grandesPremios.repository.js');
 const { crearPronosticosRepository } = require('../src/repositories/pronosticos.repository.js');
 const { crearPronosticosService } = require('../src/services/pronosticos.service.js');
 
@@ -27,7 +29,9 @@ beforeEach(() => {
   let contador = 0;
   service = crearPronosticosService({
     pronosticos: crearPronosticosRepository(db),
-    referencias: crearReferenciasRepository(db),
+    jugadores: crearJugadoresRepository(db),
+    pilotos: crearPilotosRepository(db),
+    grandesPremios: crearGrandesPremiosRepository(db),
     reloj: () => ahora,
     generarId: () => `p${++contador}`,
   });

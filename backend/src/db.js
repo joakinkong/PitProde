@@ -44,10 +44,8 @@ const ESQUEMA = `
   );
 `;
 
-// Si la base está vacía, carga los pilotos y GPs 2026 (los mismos que usa el frontend).
+// Carga los pilotos y GPs 2026 (los mismos que usa el frontend). Solo se llama con la base recién creada.
 function cargarDatosIniciales(db) {
-  const hayPilotos = db.prepare('SELECT COUNT(*) AS n FROM pilotos').get().n > 0;
-  if (hayPilotos) return;
   const datos = crearDatosIniciales();
   const insertarPiloto = db.prepare('INSERT INTO pilotos (id, nombre, equipo, numero, activo) VALUES (?, ?, ?, ?, ?)');
   const insertarGP = db.prepare('INSERT INTO grandes_premios (id, nombre, circuito, fecha_largada) VALUES (?, ?, ?, ?)');
@@ -57,12 +55,22 @@ function cargarDatosIniciales(db) {
   db.exec('COMMIT');
 }
 
+// Carga los datos 2026 una sola vez por base (se marca con PRAGMA user_version). Si no, "Borrar todo"
+// dejaría la base vacía y al reiniciar el servidor volvería a aparecer la temporada.
+function prepararDatos(db) {
+  const { user_version: version } = db.prepare('PRAGMA user_version').get();
+  if (version >= 1) return;
+  const hayPilotos = db.prepare('SELECT COUNT(*) AS n FROM pilotos').get().n > 0;
+  if (!hayPilotos) cargarDatosIniciales(db);
+  db.exec('PRAGMA user_version = 1');
+}
+
 // Abre la base en "ruta" (o en memoria si es ':memory:'), con las tablas y datos listos.
 function abrirBase(ruta = ':memory:') {
   const db = new DatabaseSync(ruta);
   db.exec('PRAGMA foreign_keys = ON;');
   db.exec(ESQUEMA);
-  cargarDatosIniciales(db);
+  prepararDatos(db);
   return db;
 }
 

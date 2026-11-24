@@ -4,37 +4,61 @@
 
 const http = require('node:http');
 const { randomUUID } = require('node:crypto');
-const { crearReferenciasRepository } = require('./repositories/referencias.repository.js');
+const { crearJugadoresRepository } = require('./repositories/jugadores.repository.js');
+const { crearPilotosRepository } = require('./repositories/pilotos.repository.js');
+const { crearGrandesPremiosRepository } = require('./repositories/grandesPremios.repository.js');
 const { crearPronosticosRepository } = require('./repositories/pronosticos.repository.js');
+const { crearDatosRepository } = require('./repositories/datos.repository.js');
+const { crearJugadoresService } = require('./services/jugadores.service.js');
+const { crearPilotosService } = require('./services/pilotos.service.js');
+const { crearGrandesPremiosService } = require('./services/grandesPremios.service.js');
 const { crearPronosticosService } = require('./services/pronosticos.service.js');
+const { crearDatosService } = require('./services/datos.service.js');
+const { crearJugadoresController } = require('./controllers/jugadores.controller.js');
+const { crearPilotosController } = require('./controllers/pilotos.controller.js');
+const { crearGrandesPremiosController } = require('./controllers/grandesPremios.controller.js');
 const { crearPronosticosController } = require('./controllers/pronosticos.controller.js');
+const { crearDatosController } = require('./controllers/datos.controller.js');
+const { crearRutas } = require('./routes.js');
+const { servirEstatico } = require('./estaticos.js');
 
 const LIMITE_CUERPO_BYTES = 10 * 1024; // un pronóstico pesa menos de 1 KB
 const LIMITE_DESCARTE_BYTES = 1024 * 1024; // lo máximo que se sigue descartando después de pasarse del límite
+const METODOS_CON_CUERPO = ['POST', 'PUT', 'PATCH'];
 
-// Tabla de rutas: [método, patrón, nombre del handler del controller].
-function crearRutas(controller) {
-  return [
-    ['GET', /^\/api\/pronosticos$/, controller.listar],
-    ['POST', /^\/api\/pronosticos$/, controller.crear],
-    ['GET', /^\/api\/pronosticos\/([^/]+)$/, controller.obtener],
-    ['PUT', /^\/api\/pronosticos\/([^/]+)$/, controller.editar],
-  ];
+// Arma todas las capas sobre la base "db" y devuelve los controllers listos.
+function armarControllers(db, reloj) {
+  const jugadores = crearJugadoresRepository(db);
+  const pilotos = crearPilotosRepository(db);
+  const grandesPremios = crearGrandesPremiosRepository(db);
+  const pronosticos = crearPronosticosRepository(db);
+  const generarId = randomUUID;
+
+  const pronosticosService = crearPronosticosService({ pronosticos, jugadores, pilotos, grandesPremios, reloj, generarId });
+  return {
+    jugadores: crearJugadoresController(crearJugadoresService({ jugadores, reloj, generarId })),
+    pilotos: crearPilotosController(crearPilotosService({ pilotos, generarId })),
+    grandesPremios: crearGrandesPremiosController(crearGrandesPremiosService({ grandesPremios, pilotos, reloj, generarId })),
+    pronosticos: crearPronosticosController(pronosticosService),
+    datos: crearDatosController(crearDatosService({
+      jugadores, pilotos, grandesPremios, pronosticosService, datos: crearDatosRepository(db),
+    })),
+  };
 }
 
 // Lee el cuerpo de la petición con tope de tamaño. Devuelve { texto } o { demasiadoGrande: true }.
-function leerCuerpo(req) {
+function leerCuerpo(req, limiteBytes) {
   return new Promise((resolve, reject) => {
     const partes = [];
     let bytes = 0;
     req.on('data', (parte) => {
       bytes += parte.length;
-      if (bytes > LIMITE_CUERPO_BYTES) {
+      if (bytes > limiteBytes) {
         // Se responde 413 enseguida, pero se sigue descartando lo que llega: cortar mientras el cliente
         // todavía escribe le rompe la conexión antes de que lea la respuesta. Pasado el tope de descarte, se corta igual.
         partes.length = 0;
         resolve({ demasiadoGrande: true });
-        if (bytes > LIMITE_DESCARTE_BYTES) req.destroy();
+        if (bytes > limiteBytes + LIMITE_DESCARTE_BYTES) req.destroy();
         return;
       }
       partes.push(parte);
@@ -53,26 +77,24 @@ function responder(res, estado, cuerpo) {
 
 // Crea el servidor HTTP (sin ponerlo a escuchar) sobre la base "db". "reloj" permite fijar la hora en pruebas.
 function crearApp(db, { reloj = () => new Date() } = {}) {
-  const service = crearPronosticosService({
-    pronosticos: crearPronosticosRepository(db),
-    referencias: crearReferenciasRepository(db),
-    reloj,
-    generarId: randomUUID,
-  });
-  const rutas = crearRutas(crearPronosticosController(service));
+  const rutas = crearRutas(armarControllers(db, reloj));
 
   return http.createServer(async (req, res) => {
     try {
       const url = new URL(req.url, 'http://localhost');
-      const candidatas = rutas.map(([metodo, patron, handler]) => ({ metodo, handler, coincide: patron.exec(url.pathname) }));
-      const deLaRuta = candidatas.filter((c) => c.coincide);
+      if (req.method === 'GET' && servirEstatico(url.pathname, res)) return undefined;
+
+      const deLaRuta = rutas
+        .map(([metodo, patron, handler, opciones]) => ({ metodo, handler, opciones, coincide: patron.exec(url.pathname) }))
+        .filter((c) => c.coincide);
       if (deLaRuta.length === 0) return responder(res, 404, { errores: ['Ruta inexistente.'] });
       const ruta = deLaRuta.find((c) => c.metodo === req.method);
       if (!ruta) return responder(res, 405, { errores: ['Método no permitido en esta ruta.'] });
 
       let body;
-      if (req.method === 'POST' || req.method === 'PUT') {
-        const cuerpo = await leerCuerpo(req);
+      if (METODOS_CON_CUERPO.includes(req.method)) {
+        const limite = (ruta.opciones && ruta.opciones.limiteBytes) || LIMITE_CUERPO_BYTES;
+        const cuerpo = await leerCuerpo(req, limite);
         if (cuerpo.demasiadoGrande) return responder(res, 413, { errores: ['El cuerpo es demasiado grande.'] });
         try { body = JSON.parse(cuerpo.texto); } catch (error) {
           return responder(res, 400, { errores: ['El cuerpo no es un JSON válido.'] });
