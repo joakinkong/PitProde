@@ -1,0 +1,11 @@
+---
+
+**Alta** `app.js:64–89` — Sin autenticación en ninguna ruta
+Entrada: cualquier petición HTTP al puerto, con un `jugadorId` arbitrario en el body o en el path.
+Consecuencia: cualquier cliente puede hacer `POST /api/pronosticos` cargando un pronóstico a nombre de otro jugador, o `PUT /api/pronosticos/:id` sobreescribiendo el pronóstico de alguien más. No hay nada en `app.js`, en el controller ni en el service que verifique identidad. Los datos pueden ser alterados por cualquiera que llegue al servidor.
+
+---
+
+**Media** `app.js:81` — `decodeURIComponent` sin captura de `URIError`
+Entrada: `GET /api/pronosticos/%GG` (o cualquier path con `%` seguido de caracteres no-hexadecimales).
+Consecuencia: `decodeURIComponent('%GG')` tira `URIError`; lo atrapa el `catch` general de la línea 85 y devuelve 500. El servidor sobrevive, pero responde 500 a una petición que semánticamente debería ser 400. Un scanner automático o un cliente mal configurado puede generar falsos positivos de alerta en monitores de errores.

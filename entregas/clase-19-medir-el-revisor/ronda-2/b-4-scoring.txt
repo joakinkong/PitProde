@@ -1,0 +1,18 @@
+Tengo todo lo que necesito. Leí `scoring.js`, `storage.js`, `app.js` y `scoring.test.js` para entender el flujo completo de datos antes de emitir el reporte.
+
+---
+
+**Baja** `scoring.js:23` — `estadoGP` acepta como finalizado cualquier valor truthy en `gp.resultado`, sin validar su estructura
+
+**Entrada:** `gp.resultado` seteado a un objeto parcial (p.ej. `{}` o `{p1:"x",p2:"y",p3:"z"}` sin `pole`), accesible hoy editando localStorage desde las DevTools del navegador.
+
+**Consecuencia:** `puntuarPronostico` (línea 51) ejecuta `pronostico.pole === resultado.pole`; si `resultado.pole` es `undefined` y `pronostico.pole` es un ID de piloto válido, el resultado es `false` → 0 puntos de pole para todos sin aviso. Si también `pronostico.pole` fuera `undefined` (segundo archivo corrupto), `undefined === undefined` = `true` → 3 puntos de pole incorrectos para todos. Ningún caso lanza excepción ni muestra error; la tabla refleja puntajes silenciosamente incorrectos hasta que el resultado se corrija.
+
+---
+
+**Nota sobre el resto de las cuatro preguntas:**
+
+- **Validación upstream:** `storage.js:errorDePodio` chequea los cuatro campos antes de guardar o importar, así que el hallazgo solo se activa por edición manual de localStorage.
+- **Si scoring.js falla con una excepción** (p.ej. un TypeError en un caso extremo), `vistaTabla` deja de renderizar pero los datos en localStorage quedan intactos; el resto de las pestañas siguen funcionando.
+- **Volumen:** `calcularTabla` → `resumirJugador` es O(jugadores × pronósticos); `recalcularPuntos` es O(pronósticos × GPs). Para el caso de uso (decenas de jugadores, 23 GPs) es completamente negligible.
+- **Permisos:** App 100% cliente, sin servidor ni autenticación. Cualquier persona con acceso al navegador puede modificar cualquier dato desde las DevTools. Esto es by design para un prode local entre amigos.

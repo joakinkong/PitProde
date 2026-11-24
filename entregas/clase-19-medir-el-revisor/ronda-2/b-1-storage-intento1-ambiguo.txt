@@ -1,0 +1,4 @@
+Hay dos `storage.js`. ¿Cuál querés revisar?
+
+1. `Prototipo Veredas Seguras/app/src/lib/storage.js`
+2. `PitProde/storage.js`

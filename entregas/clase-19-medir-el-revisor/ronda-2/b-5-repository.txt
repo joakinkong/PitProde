@@ -1,0 +1,15 @@
+Leí los archivos de contexto necesarios (service, controller, db, app). Reporto solo sobre `pronosticos.repository.js`.
+
+---
+
+**Media** `pronosticos.repository.js:34–35` — `actualizar` no guarda contra `porId.get()` devolviendo `undefined`
+Entrada: `id` que no existe en la tabla en el momento del SELECT post-UPDATE (el service verifica existencia antes de llamar, pero el repository no tiene guarda propia; si el row fue eliminado entre el chequeo del service y la ejecución, o si se llama al repo directamente).
+Consecuencia: `filaAPronostico(undefined)` lanza `TypeError: Cannot read properties of undefined`. El try/catch global de `app.js:85` lo captura y responde 500; si el `UPDATE` sí corrió (caso de race con proceso externo sobre el archivo SQLite), el cliente recibe error aunque el dato fue modificado, y puede reintentar sobre un estado ya cambiado.
+
+**Media** `pronosticos.repository.js:16–17, 29` — Excepciones de constraint SQLite en `insertar.run()` no capturadas en el repositorio
+Entrada: Violación de UNIQUE `(jugador_id, gp_id)` por dos requests que pasan el chequeo de duplicado en el service casi en simultáneo, o violación de FK si se llama al repo directamente con IDs inexistentes (con `PRAGMA foreign_keys = ON` confirmado en `db.js:4`).
+Consecuencia: La excepción no se captura en el repository ni en el service; sube hasta el try/catch de `app.js:85` y se responde 500 en lugar de 409. El estado de la base queda correcto (nada se insertó), pero el caller recibe un código de error semánticamente incorrecto y sin detalle del motivo real.
+
+**Baja** `pronosticos.repository.js:48–49` — `listar` sin cláusula `LIMIT`
+Entrada: Llamada a `listar()` sin filtros (`gpId = null`, `jugadorId = null`).
+Consecuencia: SELECT sin cota devuelve todas las filas de la tabla. Con el volumen esperado del prode (24 GPs × N jugadores) es inocuo hoy, pero la consulta es síncrona (bloquea el hilo hasta que SQLite termina) y no tiene ninguna protección si el volumen crece o si la tabla es usada en otro contexto.
