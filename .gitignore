@@ -4,3 +4,7 @@ node_modules/
 .env.*
 !.env.example
 dist/
+
+# Notas personales del autor (la contraseña nunca se sube)
+contraseña.txt
+link del repositorio.txt
