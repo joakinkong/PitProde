@@ -1,0 +1,39 @@
+# Evidencia — backend de pronósticos, corrida real del 24/11/2026 (hora del servidor)
+# Servidor: node backend/server.js  |  Base: SQLite en archivo
+
+$ 1. Crear pronóstico de Ana para Qatar (GP que no largó)
+{"id":"be59d975-d3ab-4463-b209-bb4fea8ab347","jugadorId":"ana","gpId":"gp-qat","p1":"piloto-nor","p2":"piloto-ver","p3":"piloto-lec","pole":"piloto-nor","fechaCarga":"2026-11-24T03:42:40.399Z","favorito":false,"puntos":null,"estadoGP":"proximo"}
+[HTTP 201]
+
+$ 2. Mismo jugador y mismo GP otra vez
+{"errores":["Ese jugador ya tiene un pronóstico para este GP. Editá el que existe."]}
+[HTTP 409]
+
+$ 3. Podio con piloto repetido (Beto, Abu Dabi)
+{"errores":["P1, P2 y P3 tienen que ser pilotos distintos."]}
+[HTTP 422]
+
+$ 4. GP que ya largó (Australia) — el cliente manda una fechaCarga vieja para hacer trampa
+{"errores":["Ese GP ya largó: el pronóstico está bloqueado."]}
+[HTTP 422]
+
+$ 5. Editar el pronóstico de Ana (Qatar todavía no largó)
+{"id":"be59d975-d3ab-4463-b209-bb4fea8ab347","jugadorId":"ana","gpId":"gp-qat","p1":"piloto-ver","p2":"piloto-nor","p3":"piloto-lec","pole":"piloto-ver","fechaCarga":"2026-11-24T03:42:40.611Z","favorito":false,"puntos":null,"estadoGP":"proximo"}
+[HTTP 200]
+
+$ 6. Listar los pronósticos de Qatar
+{"pronosticos":[{"id":"be59d975-d3ab-4463-b209-bb4fea8ab347","jugadorId":"ana","gpId":"gp-qat","p1":"piloto-ver","p2":"piloto-nor","p3":"piloto-lec","pole":"piloto-ver","fechaCarga":"2026-11-24T03:42:40.611Z","favorito":false,"puntos":null,"estadoGP":"proximo"}]}
+[HTTP 200]
+
+$ 7. Intento de inyección SQL en un filtro
+{"pronosticos":[]}
+[HTTP 200]
+
+$ 8. JSON roto
+{"errores":["El cuerpo no es un JSON válido."]}
+[HTTP 400]
+
+$ 9. Pronóstico inexistente
+{"errores":["No existe ese pronóstico."]}
+[HTTP 404]
+

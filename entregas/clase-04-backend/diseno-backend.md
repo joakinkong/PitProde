@@ -127,3 +127,21 @@ Por qué:
 La funcionalidad de **pronósticos**: crear, editar, consultar y listar, con todas las reglas del prode del lado del servidor y con la hora del servidor como referencia. Quedan para después los demás recursos, la tabla, la importación y la conexión del frontend.
 
 Límites conocidos de esta primera versión, declarados a propósito: no hay autenticación (cualquiera que llegue a la API puede cargar un pronóstico por cualquier jugador) y el servidor escucha solo en `127.0.0.1`. Es una decisión para esta etapa, no un descuido.
+
+## 8. Evidencia de que funciona
+
+- **Tests automáticos:** 26 pruebas nuevas del backend (13 del service con base en memoria y reloj controlado, 13 de punta a punta contra un servidor HTTP real). Con las 20 que ya existían del puntaje, `node --test` da 46 de 46. Salida completa en `tests-salida.txt`.
+- **Corrida a mano contra el servidor real** (`node backend/server.js`, SQLite en archivo, hora real del servidor): `evidencia.txt` tiene las nueve peticiones con su respuesta. Lo que muestran:
+  - Crear un pronóstico para un GP que no largó devuelve `201` y los puntos en `null`.
+  - Repetir jugador y GP devuelve `409`; un podio con piloto repetido, `422`.
+  - **Un pronóstico para un GP que ya largó devuelve `422` aunque el cliente mande una `fechaCarga` vieja:** la hora que cuenta es la del servidor. Esto resuelve el problema 1 del análisis.
+  - Editar y listar funcionan; un filtro con `' OR 1=1 --` devuelve una lista vacía (consultas con parámetros); un JSON roto devuelve `400`.
+- **Un bug encontrado por los tests:** al pasarse del límite de tamaño del cuerpo, el servidor cortaba la conexión antes de responder y el cliente veía un error de socket en vez de un `413`. Se corrigió respondiendo primero y cortando después.
+
+Cómo repetirlo:
+
+```
+node --test
+node backend/seed-demo.js
+node backend/server.js
+```
