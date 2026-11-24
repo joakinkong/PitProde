@@ -1,0 +1,8 @@
+# Netlify publica el frontend: arma la carpeta dist con scripts/build-frontend.js.
+# La variable PITPRODE_API_URL (dirección del backend en Render) se carga en el panel de Netlify.
+[build]
+  command = "node scripts/build-frontend.js"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "22"
