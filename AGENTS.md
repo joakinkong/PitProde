@@ -11,9 +11,12 @@ es el TP1 de Generación T (`../tp1`).
 
 ## Stack y restricciones
 
-- HTML, CSS y JavaScript vanilla. **Sin librerías, sin frameworks, sin build.** Se abre
-  `index.html` directo o se publica tal cual en GitHub Pages.
-- Persistencia en `localStorage` (clave `pitprode.datos`), con exportar/importar JSON.
+- Frontend en HTML, CSS y JavaScript vanilla. **Sin librerías, sin frameworks, sin build.**
+- Backend en Node sin dependencias (`node:http`, `node:sqlite`). **La app necesita el servidor**: se usa desde
+  `http://127.0.0.1:3000` (`node backend/server.js`), que también sirve el frontend. Ya no se abre `index.html`
+  suelto ni se publica en GitHub Pages sin servidor.
+- Persistencia en SQLite (`backend/datos/pitprode.sqlite`), con exportar/importar JSON. La rama
+  `entrega-modulo-3` conserva la versión anterior con `localStorage`.
 - Scripts clásicos (no módulos ES): cada archivo define funciones globales y, al final,
   las exporta con `module.exports` solo si existe (para poder probarlas desde Node).
 
@@ -21,14 +24,15 @@ es el TP1 de Generación T (`../tp1`).
 
 | Archivo            | Responsabilidad |
 |--------------------|-----------------|
-| `index.html`       | Esqueleto de la página y carga de scripts (`storage.js`, `scoring.js`, `app.js`). |
+| `index.html`       | Esqueleto de la página y carga de scripts (`storage.js`, `scoring.js`, `api.js`, `app.js`). |
 | `scoring.js`       | Reglas del prode: puntos, estado de los GPs, tabla y validaciones. **Funciones puras.** |
-| `storage.js`       | localStorage, datos iniciales 2026, validación y normalización de JSON importado. |
-| `app.js`           | Interfaz y eventos. No calcula puntos ni toca localStorage directamente. |
+| `storage.js`       | Datos iniciales 2026, validación y normalización de JSON importado. Lo usan el frontend y el backend. Las funciones de `localStorage` (`cargarDatos`, `guardarDatos`) quedaron sin uso. |
+| `api.js`           | Cliente de la API (`API.pedir`): nunca lanza, devuelve `{ ok, datos }` o `{ ok: false, errores }`. |
+| `app.js`           | Interfaz y eventos. No calcula puntos ni guarda nada: manda cada cambio a la API y vuelve a pedir los datos. |
 | `styles.css`       | Estilos. |
 | `tests.html`       | Pruebas que corren en el navegador (abrir el archivo). |
 | `scoring.test.js`  | Tests unitarios de puntos y tabla con `node:test`. |
-| `backend/`         | Backend en Node (sin dependencias): Controller → Service → Repository sobre `node:http` y `node:sqlite`. Hoy solo implementa pronósticos (`/api/pronosticos`). El frontend todavía no se conecta. |
+| `backend/`         | Backend en Node: Controller → Service → Repository sobre `node:http` y `node:sqlite`. Jugadores, pilotos, GPs, resultados, pronósticos, tabla, exportar e importar. Sirve también el frontend. |
 | `entregas/`        | Documentos de las actividades del curso (clases 4, 11, 17 y 19), con su evidencia y los PDF. |
 | `.claude/agents/revisor.md` | Subagente revisor de seguridad y robustez (versión final de las clases 17 y 19). |
 
@@ -56,16 +60,19 @@ es el TP1 de Generación T (`../tp1`).
 ## Backend (`backend/`)
 
 - `controllers/` traduce HTTP a llamadas al service y arma los códigos de estado; no tiene reglas ni SQL.
-- `services/` tiene las reglas del prode y **reutiliza `scoring.js`** (no duplicar reglas). No sabe de HTTP ni de SQL; la hora llega por `reloj` para poder probarlo.
+- `services/` tiene las reglas del prode y **reutiliza `scoring.js` y `storage.js`** (no duplicar reglas). No sabe de HTTP ni de SQL; la hora llega por `reloj` para poder probarlo.
 - `repositories/` es el único lugar con SQL, siempre con parámetros (`?`).
-- Los puntos no se guardan: se calculan al leer.
-- Sin autenticación todavía; el servidor escucha solo en `127.0.0.1`. Correrlo: `node backend/seed-demo.js` y `node backend/server.js`.
+- `routes.js` es la tabla de rutas; `estaticos.js` sirve el frontend con una lista fija de archivos.
+- Los puntos no se guardan: se calculan al leer. La hora que manda es la del servidor.
+- El frontend valida solo para dar respuesta rápida; el backend valida siempre.
+- Al crear la base se cargan los pilotos y GPs 2026 una sola vez (`PRAGMA user_version`); "Borrar todo" deja la base vacía de verdad.
+- Sin autenticación todavía; el servidor escucha solo en `127.0.0.1`.
 - Sin `package.json` ni dependencias: solo módulos de Node (`node:http`, `node:sqlite`, `node:test`).
 
 ## Cómo probar
 
 ```bash
-node --test          # desde la raíz del proyecto: scoring.test.js y backend/tests/ (46 pruebas)
+node --test          # desde la raíz del proyecto: scoring.test.js y backend/tests/ (63 pruebas)
 ```
 
 Además, abrir `tests.html` en el navegador tiene que mostrar todas las pruebas en verde.

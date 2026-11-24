@@ -145,3 +145,7 @@ node --test
 node backend/seed-demo.js
 node backend/server.js
 ```
+
+---
+
+*Nota posterior a la entrega:* las secciones 7 y 8 describen lo que se entregó en la clase 4 (solo pronósticos, frontend sin conectar). Después se completó el backend (jugadores, pilotos, GPs, resultados, tabla, exportar e importar) y se conectó el frontend; esa versión está en `main`, y la de la entrega se conserva en la rama `entrega-modulo-3`.
