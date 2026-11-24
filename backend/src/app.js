@@ -68,45 +68,65 @@ function leerCuerpo(req, limiteBytes) {
   });
 }
 
-// Escribe una respuesta JSON.
-function responder(res, estado, cuerpo) {
+// Cabeceras CORS para el origen de la petición, o {} si ese origen no está permitido.
+// Un navegador solo deja que una página lea la respuesta si la API nombra su dirección.
+function cabecerasCors(origen, origenesPermitidos) {
+  if (!origen || !origenesPermitidos.includes(origen)) return {};
+  return {
+    'Access-Control-Allow-Origin': origen,
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Access-Control-Max-Age': '600',
+    Vary: 'Origin',
+  };
+}
+
+// Escribe una respuesta JSON (con las cabeceras extra, por ejemplo las de CORS).
+
+function responder(res, estado, cuerpo, extra = {}) {
   const texto = JSON.stringify(cuerpo);
-  res.writeHead(estado, { 'Content-Type': 'application/json; charset=utf-8', 'Content-Length': Buffer.byteLength(texto) });
+  res.writeHead(estado, { 'Content-Type': 'application/json; charset=utf-8', 'Content-Length': Buffer.byteLength(texto), ...extra });
   res.end(texto);
 }
 
 // Crea el servidor HTTP (sin ponerlo a escuchar) sobre la base "db". "reloj" permite fijar la hora en pruebas.
-function crearApp(db, { reloj = () => new Date() } = {}) {
+function crearApp(db, { reloj = () => new Date(), origenesPermitidos = [] } = {}) {
   const rutas = crearRutas(armarControllers(db, reloj));
 
   return http.createServer(async (req, res) => {
     try {
       const url = new URL(req.url, 'http://localhost');
       if (req.method === 'GET' && servirEstatico(url.pathname, res)) return undefined;
+      const cors = cabecerasCors(req.headers.origin, origenesPermitidos);
+      // Pregunta previa del navegador ("¿me dejás hacer esto?"): se contesta sin tocar nada.
+      if (req.method === 'OPTIONS') {
+        res.writeHead(Object.keys(cors).length ? 204 : 403, cors);
+        return res.end();
+      }
 
       const deLaRuta = rutas
         .map(([metodo, patron, handler, opciones]) => ({ metodo, handler, opciones, coincide: patron.exec(url.pathname) }))
         .filter((c) => c.coincide);
-      if (deLaRuta.length === 0) return responder(res, 404, { errores: ['Ruta inexistente.'] });
+      if (deLaRuta.length === 0) return responder(res, 404, { errores: ['Ruta inexistente.'] }, cors);
       const ruta = deLaRuta.find((c) => c.metodo === req.method);
-      if (!ruta) return responder(res, 405, { errores: ['Método no permitido en esta ruta.'] });
+      if (!ruta) return responder(res, 405, { errores: ['Método no permitido en esta ruta.'] }, cors);
 
       let body;
       if (METODOS_CON_CUERPO.includes(req.method)) {
         const limite = (ruta.opciones && ruta.opciones.limiteBytes) || LIMITE_CUERPO_BYTES;
         const cuerpo = await leerCuerpo(req, limite);
-        if (cuerpo.demasiadoGrande) return responder(res, 413, { errores: ['El cuerpo es demasiado grande.'] });
+        if (cuerpo.demasiadoGrande) return responder(res, 413, { errores: ['El cuerpo es demasiado grande.'] }, cors);
         try { body = JSON.parse(cuerpo.texto); } catch (error) {
-          return responder(res, 400, { errores: ['El cuerpo no es un JSON válido.'] });
+          return responder(res, 400, { errores: ['El cuerpo no es un JSON válido.'] }, cors);
         }
       }
       const params = { id: ruta.coincide[1] ? decodeURIComponent(ruta.coincide[1]) : undefined };
       const query = Object.fromEntries(url.searchParams);
       const { estado, cuerpo } = await ruta.handler({ params, query, body });
-      return responder(res, estado, cuerpo);
+      return responder(res, estado, cuerpo, cors);
     } catch (error) {
       console.error(error);
-      return responder(res, 500, { errores: ['Error interno del servidor.'] });
+      return responder(res, 500, { errores: ['Error interno del servidor.'] }, cabecerasCors(req.headers.origin, origenesPermitidos));
     }
   });
 }
