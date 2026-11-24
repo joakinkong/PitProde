@@ -156,6 +156,72 @@ for (const { nombre, abrir } of BASES) {
       });
     });
 
+    describe('reglas de borde', () => {
+      test('RN1, RN5 y RN8: se respetan los topes de largo', async () => {
+        assert.equal((await pedir('POST', '/api/jugadores', { nombre: 'x'.repeat(31) })).estado, 422);
+        assert.equal((await pedir('POST', '/api/jugadores', { nombre: 'Con apodo largo', apodo: 'y'.repeat(21) })).estado, 422);
+        const justo = await pedir('POST', '/api/jugadores', { nombre: 'z'.repeat(30), apodo: 'w'.repeat(20) });
+        assert.equal(justo.estado, 201); // 30 y 20 caracteres entran justo
+        await pedir('DELETE', `/api/jugadores/${justo.cuerpo.id}`);
+        assert.equal((await pedir('POST', '/api/pilotos', { nombre: 'x'.repeat(41), equipo: 'E', numero: 7 })).estado, 422);
+        assert.equal((await pedir('POST', '/api/pilotos', { nombre: 'N', equipo: 'e'.repeat(31), numero: 7 })).estado, 422);
+        assert.equal((await pedir('POST', '/api/pilotos', { nombre: 'N', equipo: 'E', numero: -1 })).estado, 422);
+        assert.equal((await pedir('POST', '/api/pilotos', { nombre: 'N', equipo: 'E', numero: 1.5 })).estado, 422);
+        assert.equal((await pedir('POST', '/api/grandes-premios', { nombre: 'g'.repeat(51), circuito: 'C', fechaLargada: '2026-12-31T12:00:00Z' })).estado, 422);
+      });
+
+      test('RN10: borrar un GP borra sus pronósticos y dice cuántos', async () => {
+        const j = (await pedir('POST', '/api/jugadores', { nombre: 'Para borrar GP' })).cuerpo;
+        const gp = (await pedir('POST', '/api/grandes-premios', { nombre: 'GP con pronósticos', circuito: 'C', fechaLargada: '2026-12-31T12:00:00Z' })).cuerpo;
+        assert.equal((await pedir('POST', '/api/pronosticos', CON_PODIO(j.id, gp.id, 'piloto-nor', 'piloto-ver', 'piloto-lec', 'piloto-nor'))).estado, 201);
+        const r = await pedir('DELETE', `/api/grandes-premios/${gp.id}`);
+        assert.equal(r.cuerpo.pronosticosBorrados, 1);
+        assert.deepEqual((await pedir('GET', `/api/pronosticos?gpId=${gp.id}`)).cuerpo.pronosticos, []);
+        await pedir('DELETE', `/api/jugadores/${j.id}`);
+      });
+
+      test('RN11: un GP con resultado no puede mover su largada al futuro', async () => {
+        const gp = (await pedir('POST', '/api/grandes-premios', { nombre: 'GP ya corrido', circuito: 'C', fechaLargada: '2026-02-01T10:00:00Z' })).cuerpo;
+        assert.equal((await pedir('PUT', `/api/grandes-premios/${gp.id}/resultado`, podio('piloto-ver', 'piloto-nor', 'piloto-lec', 'piloto-nor'))).estado, 200);
+        const futuro = await pedir('PUT', `/api/grandes-premios/${gp.id}`, { nombre: 'GP ya corrido', circuito: 'C', fechaLargada: '2026-12-01T10:00:00Z' });
+        assert.equal(futuro.estado, 422);
+        assert.match(futuro.cuerpo.errores[0], /ya tiene resultado/);
+        const pasado = await pedir('PUT', `/api/grandes-premios/${gp.id}`, { nombre: 'GP ya corrido', circuito: 'C', fechaLargada: '2026-01-15T10:00:00Z' });
+        assert.equal(pasado.estado, 200); // moverla a otra fecha pasada sí se puede
+        await pedir('DELETE', `/api/grandes-premios/${gp.id}`);
+      });
+
+      test('RN14: a la hora exacta de la largada el pronóstico ya está bloqueado', async () => {
+        const j = (await pedir('POST', '/api/jugadores', { nombre: 'Hora exacta' })).cuerpo;
+        const pron = CON_PODIO(j.id, 'gp-aus', 'piloto-nor', 'piloto-ver', 'piloto-lec', 'piloto-nor');
+        ahora = new Date('2026-03-08T03:59:59Z'); // un segundo antes de las 04:00:00 UTC
+        const antes = await pedir('POST', '/api/pronosticos', pron);
+        assert.equal(antes.estado, 201);
+        ahora = new Date('2026-03-08T04:00:00Z'); // la hora exacta
+        const editar = await pedir('PUT', `/api/pronosticos/${antes.cuerpo.id}`, podio('piloto-ver', 'piloto-nor', 'piloto-lec', 'piloto-ver'));
+        assert.equal(editar.estado, 422);
+        ahora = new Date('2026-03-01T00:00:00Z');
+        await pedir('DELETE', `/api/jugadores/${j.id}`);
+      });
+
+      test('RN6: un piloto inactivo no se elige en un pronóstico, sí en un resultado, y sus pronósticos viejos suman', async () => {
+        const j = (await pedir('POST', '/api/jugadores', { nombre: 'Piloto que se va' })).cuerpo;
+        const pr = (await pedir('POST', '/api/pronosticos', CON_PODIO(j.id, 'gp-ita', 'piloto-sai', 'piloto-ver', 'piloto-lec', 'piloto-sai'))).cuerpo;
+        const sai = (await pedir('GET', '/api/pilotos')).cuerpo.find((p) => p.id === 'piloto-sai');
+        await pedir('PUT', '/api/pilotos/piloto-sai', { ...sai, activo: false });
+        const otro = (await pedir('POST', '/api/jugadores', { nombre: 'Otro jugador' })).cuerpo;
+        assert.equal((await pedir('POST', '/api/pronosticos', CON_PODIO(otro.id, 'gp-ita', 'piloto-sai', 'piloto-ver', 'piloto-lec', 'piloto-ver'))).estado, 422);
+        ahora = new Date('2026-09-07T00:00:00Z'); // Italia ya largó (6/9/2026)
+        assert.equal((await pedir('PUT', '/api/grandes-premios/gp-ita/resultado', podio('piloto-sai', 'piloto-ver', 'piloto-lec', 'piloto-sai'))).estado, 200);
+        assert.equal((await pedir('GET', `/api/pronosticos/${pr.id}`)).cuerpo.puntos, 18); // perfecto: 5 + 5 + 5 + 3
+        ahora = new Date('2026-03-01T00:00:00Z');
+        await pedir('DELETE', '/api/grandes-premios/gp-ita/resultado');
+        await pedir('PUT', '/api/pilotos/piloto-sai', { ...sai, activo: true });
+        await pedir('DELETE', `/api/jugadores/${j.id}`);
+        await pedir('DELETE', `/api/jugadores/${otro.id}`);
+      });
+    });
+
     describe('exportar, importar y reiniciar', () => {
       test('exportar e importar el mismo archivo deja todo igual', async () => {
         const antes = (await pedir('GET', '/api/exportar')).cuerpo;

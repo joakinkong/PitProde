@@ -90,7 +90,14 @@ for (const { nombre, abrir } of BASES) {
         assert.equal((await service.listar()).pronosticos.length, 1);
       });
 
-      test('otro jugador sí puede pronosticar el mismo GP, y el mismo jugador otro GP', async () => {
+      test('dos cargas simultáneas del mismo jugador y GP: se guarda una y la otra recibe "duplicado", nunca un error', async () => {
+      const resultados = await Promise.all([service.crear(entrada()), service.crear(entrada({ p1: 'piloto-ver', p2: 'piloto-nor' }))]);
+      assert.equal(resultados.filter((r) => r.ok).length, 1);
+      assert.equal(resultados.filter((r) => r.motivo === 'duplicado').length, 1);
+      assert.equal((await service.listar()).pronosticos.length, 1);
+    });
+
+    test('otro jugador sí puede pronosticar el mismo GP, y el mismo jugador otro GP', async () => {
         assert.equal((await service.crear(entrada())).ok, true);
         assert.equal((await service.crear(entrada({ jugadorId: 'beto' }))).ok, true);
         assert.equal((await service.crear(entrada({ gpId: 'gp-chn' }))).ok, true);

@@ -17,6 +17,10 @@ function limpiarEntrada(entrada, campos) {
   return limpia;
 }
 
+// Detecta el error "ya existe" de la base de datos, tanto en SQLite como en Postgres (código 23505).
+const esViolacionUnica = (error) => Boolean(error) && (error.code === '23505' || /UNIQUE constraint failed|duplicate key/i.test(error.message || ''));
+const MENSAJE_DUPLICADO = 'Ese jugador ya tiene un pronóstico para este GP. Editá el que existe.';
+
 // Devuelve { ok: false, motivo, errores } con el motivo que usa el controller para elegir el código HTTP.
 const fallo = (motivo, errores) => ({ ok: false, motivo, errores });
 const noExiste = () => fallo('no_encontrado', ['No existe ese pronóstico.']);
@@ -57,11 +61,15 @@ function crearPronosticosService({ pronosticos, jugadores, pilotos, grandesPremi
       const gp = await grandesPremios.obtener(datos.gpId);
       const errores = await validar(datos, gp);
       if (errores.length) return fallo('invalido', errores);
-      if (await pronosticos.obtenerPorJugadorYGP(datos.jugadorId, datos.gpId)) {
-        return fallo('duplicado', ['Ese jugador ya tiene un pronóstico para este GP. Editá el que existe.']);
+      if (await pronosticos.obtenerPorJugadorYGP(datos.jugadorId, datos.gpId)) return fallo('duplicado', [MENSAJE_DUPLICADO]);
+      try {
+        const creado = await pronosticos.crear({ id: generarId(), ...datos, fechaCarga: reloj().toISOString() });
+        return { ok: true, pronostico: presentar(creado, gp) };
+      } catch (error) {
+        // Dos cargas casi simultáneas pueden pasar la verificación de arriba; la restricción única de la base frena a la segunda.
+        if (esViolacionUnica(error)) return fallo('duplicado', [MENSAJE_DUPLICADO]);
+        throw error;
       }
-      const creado = await pronosticos.crear({ id: generarId(), ...datos, fechaCarga: reloj().toISOString() });
-      return { ok: true, pronostico: presentar(creado, gp) };
     },
 
     // Cambia el podio y la pole de un pronóstico. El jugador y el GP no se pueden cambiar.
