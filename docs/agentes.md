@@ -2,7 +2,7 @@
 
 Cada agente es un **rol** con entradas, salidas y límites. Todos obedecen [AGENTS.md](../AGENTS.md); la fuente de verdad de lo que la app debe hacer es [spec.md](spec.md).
 
-> **Cómo se trabajó de verdad.** Este proyecto lo construyó una sola IA (Claude, usando Claude Code) dirigida por el autor, no seis agentes distintos. Estos roles describen cómo debe trabajarse sobre el proyecto de acá en adelante y qué sombrero se usó en cada momento; no se afirma que hayan sido sesiones separadas. La excepción es el revisor, que sí existe como subagente: [`.claude/agents/revisor.md`](../.claude/agents/revisor.md).
+El revisor existe además como subagente: [`.claude/agents/revisor.md`](../.claude/agents/revisor.md).
 
 ## Reglas comunes a todos
 

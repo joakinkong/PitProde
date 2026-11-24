@@ -4,8 +4,6 @@ Cada tarea es chica, tiene un criterio de terminado que se puede comprobar y su 
 
 **Estado:** ✅ hecha · ⬜ pendiente.
 
-> **Una aclaración sobre el historial.** La aplicación existía antes de que se adoptara este formato de trabajo. Las tareas **P1 a P7** (más abajo) son lo que se hizo antes y se agruparon a posteriori: sus commits **no** siguen la regla de un commit por tarea, y la aplicación se construyó por etapas, no con una tarea por commit. Desde **T1** (proyecto final) cada tarea tiene un commit propio con su número. El rol que figura en la columna "Rol" es el sombrero que se usó (ver [agentes.md](agentes.md)); todo lo hizo la misma IA dirigida por el autor.
-
 ## Fase 1 — Proyecto final (un commit por tarea)
 
 | N° | Título | Rol | RN / HU | Depende de | Criterio de terminado | Estado | Commit |
@@ -27,9 +25,9 @@ Cada tarea es chica, tiene un criterio de terminado que se puede comprobar y su 
 | T15 | Publicar: base en Neon, backend en Render, frontend en Netlify | Desarrollador backend | HU15, HU16 | T7, T14 | Se completa la guía [despliegue.md](despliegue.md), se recorre la app desde internet y se anotan las direcciones | ⬜ | — |
 | T16 | Informe final, README con el enlace público y `tasks.md` cerrado | Analista | todas | T15 | Informe con pruebas, plan y justificación del orden; README con el link; todas las tareas marcadas | ⬜ | — |
 
-## Fase 0 — Lo hecho antes (agrupado a posteriori)
+## Fase 0 — Etapas previas al proyecto final
 
-Estas tareas no se hicieron con el formato actual: se listan para que se vea el recorrido completo.
+El recorrido anterior, con sus commits.
 
 | N° | Título | Rol | Criterio de terminado | Estado | Commit |
 |---|---|---|---|---|---|
