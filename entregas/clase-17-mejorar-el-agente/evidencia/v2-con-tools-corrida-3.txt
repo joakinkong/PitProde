@@ -1,0 +1,13 @@
+No hay `package.json`, así que no puedo verificar la versión de Node. Lo marco como sospecha.
+
+---
+
+**Alta** `app.js:64` — Ninguna ruta verifica autenticación ni autorización.
+Entrada: `POST /api/pronosticos` o `PUT /api/pronosticos/:id` enviados por cualquier cliente HTTP sin credencial, token ni header especial.
+Consecuencia: cualquier persona que alcance el puerto puede crear pronósticos en nombre de cualquier jugador o sobreescribir los existentes; los datos del prode quedan a merced de cualquier cliente de la red.
+
+---
+
+**Media (Sospecha)** `app.js:26–45` — `leerCuerpo` no tiene timeout; si el cliente abre una conexión POST/PUT y nunca termina de enviar el cuerpo, la promesa queda pendiente para siempre.
+Entrada: cliente (buggy o malicioso) que establece la conexión TCP y manda los headers de la petición pero no cierra el stream de datos, manteniendo vivo el `req.on('data')` sin que se dispare `'end'`.
+Consecuencia: cada conexión así consume un file descriptor y una referencia de event-loop hasta que el proceso cae por agotamiento. Es sospecha porque el comportamiento real depende de la versión de Node.js: v18+ tiene `requestTimeout` de 5 minutos por defecto; versiones anteriores no tienen ninguno. Sin `package.json` no puedo confirmarlo.

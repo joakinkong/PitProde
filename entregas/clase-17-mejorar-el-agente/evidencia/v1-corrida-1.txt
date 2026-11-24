@@ -1,0 +1,29 @@
+---
+
+**Hallazgo 1 — Sin autenticación ni autorización**
+
+Los cuatro endpoints aceptan cualquier petición sin verificar quién la hace. Cualquier cliente que llegue al puerto puede listar todos los pronósticos, crear nuevos y editar los existentes. No hay token, sesión ni header de identidad.
+
+---
+
+**Hallazgo 2 — `query` params entran sin validación al handler**
+
+`Object.fromEntries(url.searchParams)` acepta cualquier clave y valor arbitrario del cliente, y ese objeto se pasa directo al handler sin restricción ni lista blanca. Dependiendo de cómo el service o el repository lo consuma, es un vector de manipulación de consultas.
+
+---
+
+**Hallazgo 3 — Handlers async no soportados; falla silenciosa con riesgo de crash**
+
+`ruta.handler(...)` se invoca sin `await`. Si en algún momento un handler devuelve una Promise, `{ estado, cuerpo }` se desestructura de un objeto Promise (ambos `undefined`), `Buffer.byteLength(undefined)` lanza `TypeError`, el catch externo devuelve 500, y la Promise queda como unhandled rejection. En Node.js ≥ 15 eso puede crashear el proceso. No es un problema hoy con Better-SQLite3, pero es una trampa que no avisa.
+
+---
+
+**Hallazgo 4 — `decodeURIComponent` sin catch de `URIError`**
+
+Un path como `/api/pronosticos/%GG` lanza `URIError`. El catch general lo convierte en HTTP 500 en lugar de 400. No cae el sistema, pero la respuesta es engañosa y el error interno queda logueado innecesariamente.
+
+---
+
+**Hallazgo 5 — El listener `data` no se remueve tras resolver `demasiadoGrande`**
+
+Una vez que `leerCuerpo` llama `resolve({ demasiadoGrande: true })`, el listener de `data` sigue activo. Chunks subsiguientes siguen incrementando `bytes` y pueden disparar `req.destroy()` varias veces. Node.js lo tolera, pero es un estado inconsistente: la Promise está resuelta y el stream sigue siendo consumido.

@@ -1,0 +1,25 @@
+Leí el controller. Los handlers son todos síncronos — eso descarta un hallazgo. Ahora el reporte final:
+
+---
+
+**Alta** `app.js:81` — `decodeURIComponent` sin try/catch sobre input externo
+Entrada: cualquier request a `GET /api/pronosticos/%GG` (percent-encoding inválido; el constructor `URL` lo deja pasar en `pathname`, el regex lo captura, y `decodeURIComponent('%GG')` lanza `URIError`).
+Consecuencia: el `URIError` cae al catch genérico de línea 85 y devuelve 500. Un cliente cualquiera puede forzar respuestas de error interno con una URL trivial, ocultando la causa real y exponiendo que hay una excepción no prevista.
+
+---
+
+**Media** `app.js:30–44` — `leerCuerpo` sin timeout
+Entrada: cliente que abre conexión TCP, manda los headers de un POST, y luego no envía el body (o lo hace a cuentagotas por debajo de `LIMITE_CUERPO_BYTES` para que nunca se supere).
+Consecuencia: el `await leerCuerpo(req)` nunca resuelve; el closure con `req`/`res` queda en memoria indefinidamente junto con el file descriptor abierto. Con suficientes conexiones simultáneas de este tipo, se agotan los FD del proceso. Node.js no pone timeout de socket por defecto.
+
+---
+
+**Media** `app.js:82` — `query` completo pasa sin filtrar al service
+Entrada: `?__proto__=x`, `?constructor=foo`, o decenas de parámetros con keys arbitrarios. `Object.fromEntries(url.searchParams)` los convierte todos en propiedades del objeto `query`.
+Consecuencia: Sospecha — el controller valida solo `query.estado` antes de pasarle el objeto entero al service (`service.listar(query)` en controller línea 29). No leí el service, pero si allí se usan los keys como columnas de consulta SQL o se iteran sin allowlist, hay riesgo de inyección o panic. No lo afirmo; lo marco para verificar en `pronosticos.service.js`.
+
+---
+
+**Baja** `app.js:64–89` — sin headers CORS
+Entrada: request desde un origen distinto al del servidor (frontend servido por otro host/puerto).
+Consecuencia: Sospecha — no hay `Access-Control-Allow-Origin` ni ningún middleware visible que lo agregue. Si el frontend corre en origen diferente (típico en desarrollo con Vite, por ejemplo), los browsers bloquean las respuestas. No es un problema de seguridad per se, pero sí de disponibilidad para los clientes web. No puedo confirmar si hay otro layer que agregue estos headers fuera de este archivo.

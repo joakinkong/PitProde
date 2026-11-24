@@ -1,0 +1,31 @@
+Acá están los hallazgos, de más grave a menos grave.
+
+---
+
+**1. `decodeURIComponent` sin manejo de `URIError` (línea 81)**
+
+Una URL como `/api/pronosticos/%GG` lanza un `URIError` que sube directamente al `catch` externo y sale como 500. Es un error del cliente —debería ser 400— y además cualquiera puede saturar los logs con errores 500 falsos a costo casi nulo.
+
+---
+
+**2. `ruta.handler` se llama sin `await` (línea 83)**
+
+Si algún controller devuelve una `Promise` —muy probable si los repositorios en algún momento usan una API async de SQLite— la desestructuración `{ estado, cuerpo }` obtiene `undefined` en ambos campos, `responder` falla, y el catch devuelve 500 genérico. No hay nada en la firma que lo impida, así que es una trampa activa para cualquier cambio futuro en las capas internas.
+
+---
+
+**3. Sin timeout de petición en `leerCuerpo`**
+
+La función espera el evento `'end'` sin ningún límite temporal. No hay `socket.setTimeout()`, ni `AbortSignal`, ni un `setTimeout` propio. Un cliente que gotea datos a 1 byte/segundo tiene la conexión abierta indefinidamente. Con suficientes conexiones simultáneas de ese tipo, el servidor agota file descriptors antes de que llegue al tope de bytes.
+
+---
+
+**4. Query params pasan sin ningún filtro al handler (línea 82)**
+
+`Object.fromEntries(url.searchParams)` transfiere al handler exactamente lo que el cliente envió, sin ninguna lista blanca ni sanitización en esta capa. Si algún servicio o repositorio downstream construye queries o condiciones dinámicas a partir de esas claves, esta capa no pone ninguna barrera. La defensa queda enteramente delegada a capas internas.
+
+---
+
+**5. Margen de descarte 100× entre `LIMITE_CUERPO_BYTES` y `LIMITE_DESCARTE_BYTES`**
+
+El servidor rechaza con 413 a los 10 KB pero sigue procesando eventos `'data'` hasta 1 MB antes de cortar la conexión. Con N conexiones simultáneas enviando cuerpos sobredimensionados a velocidad mínima, eso son N × ~1 MB de CPU y buffers consumidos después de que la respuesta ya fue enviada. La intención de no cortar antes de que el cliente lea el 413 es válida, pero el margen de 100× parece excesivo para ese objetivo.

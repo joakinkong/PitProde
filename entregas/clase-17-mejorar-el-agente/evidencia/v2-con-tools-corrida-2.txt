@@ -1,0 +1,13 @@
+Antes de formular cualquier hallazgo, leo todos los archivos que intervienen.
+
+---
+
+**Alta** `app.js:64` — Sin autenticación ni autorización en ninguna ruta
+Entrada: `POST /api/pronosticos` con un `jugadorId` válido de cualquier otro jugador; basta con conocer el ID.
+Consecuencia: Cualquier cliente externo puede crear o sobreescribir pronósticos de cualquier jugador. Los datos del prode quedan expuestos a alteración arbitraria; no hay nada que el dueño del pronóstico pueda hacer para protegerlo.
+
+---
+
+**Baja** `app.js:81` — `decodeURIComponent` sin manejo propio lanza `URIError` → 500
+Entrada: `GET /api/pronosticos/%zz` (percent-encoding inválido). `new URL` acepta esa ruta sin tirar; el regex la captura; `decodeURIComponent('%zz')` explota.
+Consecuencia: El servidor responde 500 en lugar de 400 y `console.error` registra un stack trace que no corresponde a un error del servidor. El cliente no puede distinguirlo de un fallo real. Alcance limitado al request afectado; el resto del sistema no se ve afectado.

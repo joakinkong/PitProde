@@ -1,0 +1,19 @@
+Los handlers son sincrónicos — no hay riesgo de `await` faltante. Con eso confirmado, la revisión queda así:
+
+---
+
+**Alta** `app.js:16–22` — Sin autenticación en ninguna ruta
+Entrada: cualquier HTTP request al puerto, sin credencial alguna; `GET /api/pronosticos` enumera todos los IDs, lo que da la información necesaria para las escrituras.
+Consecuencia: cualquier cliente en la red puede listar, crear y sobreescribir pronósticos de cualquier jugador sin restricción. Si el servidor tiene salida a internet, el impacto es irrestricto sobre todos los datos del prode.
+
+---
+
+**Baja** `app.js:81` — `decodeURIComponent` lanza `URIError` sin manejo específico
+Entrada: request con secuencia de escape inválida en el path, ej. `GET /api/pronosticos/%GG` — válido a nivel TCP, llega al servidor hoy.
+Consecuencia: el `try/catch` externo lo captura y responde 500 con `console.error`, en vez del 400 que corresponde. No cae el servidor, pero el log registra un "error interno" para algo que es error del cliente.
+
+---
+
+**Baja** `app.js:30–37` — Listeners `data` y `end` no removidos tras resolver `demasiadoGrande`
+Entrada: request con cuerpo entre 10 KB y 1 MB.
+Consecuencia: una vez resuelta la promesa con `demasiadoGrande: true`, los listeners quedan vivos en el socket hasta que el request termina de fluir. Bajo el volumen actual, es inocuo; a mayor concurrencia de requests rechazados, aumenta la presión en el event loop durante el período de drenaje.

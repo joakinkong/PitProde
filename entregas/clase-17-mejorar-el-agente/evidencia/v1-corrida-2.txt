@@ -1,0 +1,44 @@
+## Revisión de `backend/src/app.js`
+
+---
+
+**1. `ruta.handler` se llama sin `await` (línea 83) — Grave**
+
+`const { estado, cuerpo } = ruta.handler({ params, query, body });` no tiene `await`. Si algún handler es async o devuelve una Promise (lo cual es esperable en cuanto se agregue cualquier operación I/O asíncrona al service), el destructuring opera sobre el objeto Promise, `estado` y `cuerpo` quedan `undefined`, `Buffer.byteLength(undefined)` tira un TypeError, y el `catch` externo devuelve 500 en todas las requests a esa ruta. No hay advertencia, no hay stacktrace útil para el caller. Es una bomba de tiempo silenciosa: mientras el service sea síncrono (better-sqlite3 lo es) no explota, pero el día que se agregue un handler async se rompe todo sin que nadie entienda por qué.
+
+- **Entra:** cualquier handler que sea async en el futuro.
+- **Falla:** devuelve 500 universal en esa ruta; el sistema sobrevive pero la ruta queda inutilizable.
+
+---
+
+**2. `decodeURIComponent` sin manejo de `URIError` (línea 81) — Moderado**
+
+`decodeURIComponent(ruta.coincide[1])` tira `URIError` con secuencias malformadas como `%GG` o `%2`. El regex `[^/]+` acepta esos caracteres, así que llegan hasta acá. El `catch` externo los convierte en 500 en lugar de 400. Un cliente con bug de encoding recibe un error engañoso; un atacante puede usar esto para forzar 500s a voluntad en las rutas de ID.
+
+- **Entra:** cualquier path parameter con percent-encoding inválido.
+- **Falla:** 500 en vez de 400; el resto del servidor sigue andando.
+
+---
+
+**3. Sin timeout de socket (Slowloris) — Moderado**
+
+`http.createServer` sin `server.setTimeout()` ni `server.requestTimeout`. Un cliente puede abrir una conexión TCP, mandar headers a cuentagotas, y mantenerla abierta indefinidamente. Bajo carga concurrente esto agota los file descriptors del proceso. El `LIMITE_CUERPO_BYTES` protege el body, pero no protege la fase de headers (que ocurre antes de llegar al handler).
+
+- **Falla:** con suficientes conexiones lentas simultáneas, el server deja de aceptar requests nuevas.
+
+---
+
+**4. `Object.fromEntries(url.searchParams)` sin límite de parámetros (línea 82) — Moderado**
+
+No hay cap en la cantidad de query params. Una URL con miles de pares `&k=v` crea un objeto grande antes de que ninguna validación del service lo vea. Además, `Object.fromEntries` descarta silenciosamente claves duplicadas (gana la última), lo que puede enmascarar ataques de HTTP Parameter Pollution si el service valida la presencia de claves sin verificar unicidad.
+
+- **Entra:** query string con cardinalidad arbitraria, sin ningún filtro.
+- **Falla:** presión de memoria/CPU por request; duplicados silenciosos.
+
+---
+
+**5. Sin autenticación en ninguna capa visible — Bajo-moderado**
+
+Las rutas POST y PUT modifican datos y son accesibles para cualquiera que alcance el server. No hay token, sesión, ni verificación de origen. Si el server escucha en `0.0.0.0` y no hay firewall, cualquier nodo de la red puede sobrescribir pronósticos. Puede ser intencional para un prode entre conocidos en LAN, pero vale dejarlo explícito.
+
+- **Quién ejecuta:** cualquier cliente que llegue al puerto; sin restricción de permisos.

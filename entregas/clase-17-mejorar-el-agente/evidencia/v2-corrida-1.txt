@@ -1,0 +1,40 @@
+---
+
+**1. ¿Qué datos entran desde afuera sin validarse?**
+
+- `req.url` → body de texto hasta 10 KB → parseado como JSON.
+- `url.searchParams` (todos los query params) → `query` plano → `service.listar(query)`.
+- `ruta.coincide[1]` (segmento del path) → `decodeURIComponent` → `params.id`.
+- `body.jugadorId` y `body.gpId` en POST → `limpiarEntrada` los convierte a string → usados directamente en la lógica de creación.
+
+**2. ¿Qué pasa si falla?**
+
+El `try/catch` global envuelve todo el handler; cualquier excepción no prevista devuelve 500 sin crashear el servidor. Si `responder` lanza (hipotéticamente) después de que los headers ya se escribieron, el error resultante queda como promesa rechazada sin `catch`, pero Node.js lo loguea y el proceso sigue vivo.
+
+**3. ¿Qué se rompe cuando el volumen crezca?**
+
+`service.listar` trae todos los pronósticos de la DB de una vez, construye un `Map` de GPs, mapea y filtra en memoria. Con 20 jugadores y 24 GPs (máximo ~480 pronósticos) el impacto es nulo. No hay paginación, pero la escala del prode no la exige hoy.
+
+**4. ¿Quién puede ejecutar esto y con qué permisos?**
+
+Cualquier cliente HTTP que llegue al puerto. No hay autenticación, sesión, ni token.
+
+---
+
+**Hallazgos**
+
+---
+
+**Alta** `pronosticos.controller.js:34-37` / `pronosticos.service.js:43-51` — `jugadorId` y UUID de edición son completamente controlados por el cliente
+
+Entrada: POST `/api/pronosticos` con `{"jugadorId": "<uuid de otra persona>", ...}` válido; o PUT `/api/pronosticos/<uuid>` con el UUID de cualquier pronóstico ajeno (obtenible con un GET sin autenticar).
+
+Consecuencia: cualquier cliente puede crear pronósticos en nombre de cualquier jugador registrado y modificar los pronósticos de otros jugadores. Toda la integridad del prode puede alterarse sin poseer una sesión ni una clave.
+
+---
+
+**Baja** `app.js:81` — `decodeURIComponent` lanza `URIError` con secuencias de escape inválidas
+
+Entrada: GET o PUT a `/api/pronosticos/%ZZ` (porcentaje con dígito hexadecimal inválido; es un path que any cliente puede forjar trivialmente).
+
+Consecuencia: `decodeURIComponent('%ZZ')` lanza `URIError`; el `catch` externo lo atrapa y devuelve 500 en lugar de 400. No hay pérdida de datos ni caída del servidor, pero el código de estado es incorrecto y oculta la causa real del error.
