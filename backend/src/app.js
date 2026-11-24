@@ -14,11 +14,13 @@ const { crearPilotosService } = require('./services/pilotos.service.js');
 const { crearGrandesPremiosService } = require('./services/grandesPremios.service.js');
 const { crearPronosticosService } = require('./services/pronosticos.service.js');
 const { crearDatosService } = require('./services/datos.service.js');
+const { crearAccesoService } = require('./services/acceso.service.js');
 const { crearJugadoresController } = require('./controllers/jugadores.controller.js');
 const { crearPilotosController } = require('./controllers/pilotos.controller.js');
 const { crearGrandesPremiosController } = require('./controllers/grandesPremios.controller.js');
 const { crearPronosticosController } = require('./controllers/pronosticos.controller.js');
 const { crearDatosController } = require('./controllers/datos.controller.js');
+const { crearAccesoController } = require('./controllers/acceso.controller.js');
 const { crearRutas } = require('./routes.js');
 const { servirEstatico } = require('./estaticos.js');
 
@@ -27,7 +29,7 @@ const LIMITE_DESCARTE_BYTES = 1024 * 1024; // lo máximo que se sigue descartand
 const METODOS_CON_CUERPO = ['POST', 'PUT', 'PATCH'];
 
 // Arma todas las capas sobre la base "db" y devuelve los controllers listos.
-function armarControllers(db, reloj) {
+function armarControllers(db, reloj, acceso) {
   const jugadores = crearJugadoresRepository(db);
   const pilotos = crearPilotosRepository(db);
   const grandesPremios = crearGrandesPremiosRepository(db);
@@ -40,6 +42,7 @@ function armarControllers(db, reloj) {
     pilotos: crearPilotosController(crearPilotosService({ pilotos, generarId })),
     grandesPremios: crearGrandesPremiosController(crearGrandesPremiosService({ grandesPremios, pilotos, reloj, generarId })),
     pronosticos: crearPronosticosController(pronosticosService),
+    acceso: crearAccesoController(acceso),
     datos: crearDatosController(crearDatosService({
       jugadores, pilotos, grandesPremios, pronosticosService, datos: crearDatosRepository(db),
     })),
@@ -90,8 +93,9 @@ function responder(res, estado, cuerpo, extra = {}) {
 }
 
 // Crea el servidor HTTP (sin ponerlo a escuchar) sobre la base "db". "reloj" permite fijar la hora en pruebas.
-function crearApp(db, { reloj = () => new Date(), origenesPermitidos = [] } = {}) {
-  const rutas = crearRutas(armarControllers(db, reloj));
+function crearApp(db, { reloj = () => new Date(), origenesPermitidos = [], clave = '' } = {}) {
+  const acceso = crearAccesoService({ clave, reloj });
+  const rutas = crearRutas(armarControllers(db, reloj, acceso));
 
   return http.createServer(async (req, res) => {
     try {
@@ -111,6 +115,13 @@ function crearApp(db, { reloj = () => new Date(), origenesPermitidos = [] } = {}
       const ruta = deLaRuta.find((c) => c.metodo === req.method);
       if (!ruta) return responder(res, 405, { errores: ['Método no permitido en esta ruta.'] }, cors);
 
+      // Con contraseña configurada, toda escritura (salvo entrar) necesita el token del organizador.
+      const token = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
+      const escribe = req.method !== 'GET';
+      if (acceso.habilitado && escribe && !(ruta.opciones && ruta.opciones.publica) && !acceso.tokenValido(token)) {
+        return responder(res, 401, { errores: ['Tenés que ingresar como organizador para hacer cambios.'] }, cors);
+      }
+
       let body;
       if (METODOS_CON_CUERPO.includes(req.method)) {
         const limite = (ruta.opciones && ruta.opciones.limiteBytes) || LIMITE_CUERPO_BYTES;
@@ -122,7 +133,9 @@ function crearApp(db, { reloj = () => new Date(), origenesPermitidos = [] } = {}
       }
       const params = { id: ruta.coincide[1] ? decodeURIComponent(ruta.coincide[1]) : undefined };
       const query = Object.fromEntries(url.searchParams);
-      const { estado, cuerpo } = await ruta.handler({ params, query, body });
+      // Detrás del proxy de Render la dirección real llega en x-forwarded-for.
+      const ip = (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket.remoteAddress;
+      const { estado, cuerpo } = await ruta.handler({ params, query, body, token, ip });
       return responder(res, estado, cuerpo, cors);
     } catch (error) {
       console.error(error);

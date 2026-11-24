@@ -1,12 +1,17 @@
 // routes.js — tabla de rutas de la API: [método, patrón, handler del controller, opciones].
 // "limiteBytes" cambia el tope de tamaño del cuerpo para esa ruta (por defecto 10 KB).
+// "publica" la deja usar sin token aunque escriba. Toda ruta que no es GET pide token si hay contraseña.
 'use strict';
 
 const LIMITE_IMPORTAR_BYTES = 2 * 1024 * 1024; // un backup completo pesa decenas de KB
 
 // Arma la lista de rutas con los controllers ya creados.
-function crearRutas({ jugadores, pilotos, grandesPremios, pronosticos, datos }) {
+function crearRutas({ jugadores, pilotos, grandesPremios, pronosticos, datos, acceso }) {
   return [
+    ['GET', /^\/api\/acceso$/, acceso.estado],
+    // La única ruta de escritura que no pide token: es la que lo entrega.
+    ['POST', /^\/api\/acceso$/, acceso.ingresar, { publica: true }],
+
     ['GET', /^\/api\/datos$/, datos.todo],
     ['GET', /^\/api\/tabla$/, datos.tabla],
     ['GET', /^\/api\/exportar$/, datos.exportar],

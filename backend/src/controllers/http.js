@@ -2,7 +2,7 @@
 'use strict';
 
 // Código HTTP para cada motivo de fallo de un service.
-const CODIGO_POR_MOTIVO = { invalido: 422, duplicado: 409, en_uso: 409, no_encontrado: 404 };
+const CODIGO_POR_MOTIVO = { invalido: 422, duplicado: 409, en_uso: 409, no_encontrado: 404, no_autorizado: 401, bloqueado: 429 };
 
 const respuestaError = (estado, errores) => ({ estado, cuerpo: { errores } });
 
