@@ -30,7 +30,6 @@ es el TP1 de Generación T (`../tp1`).
 | `api.js`           | Cliente de la API (`API.pedir`): nunca lanza, devuelve `{ ok, datos }` o `{ ok: false, errores }`. |
 | `app.js`           | Interfaz y eventos. No calcula puntos ni guarda nada: manda cada cambio a la API y vuelve a pedir los datos. |
 | `styles.css`       | Estilos. |
-| `tests.html`       | Pruebas que corren en el navegador (abrir el archivo). |
 | `scoring.test.js`  | Tests unitarios de puntos y tabla con `node:test`. |
 | `backend/`         | Backend en Node: Controller → Service → Repository sobre `node:http` y `node:sqlite`. Jugadores, pilotos, GPs, resultados, pronósticos, tabla, exportar e importar. Sirve también el frontend. |
 | `entregas/`        | Documentos de las actividades del curso (clases 4, 11, 17 y 19), con su evidencia y los PDF. |
@@ -75,8 +74,7 @@ es el TP1 de Generación T (`../tp1`).
 node --test          # desde la raíz del proyecto: scoring.test.js y backend/tests/ (63 pruebas)
 ```
 
-Además, abrir `tests.html` en el navegador tiene que mostrar todas las pruebas en verde.
-Cualquier cambio en `scoring.js` o `storage.js` tiene que dejar ambas suites pasando.
+Cualquier cambio en `scoring.js` o `storage.js` tiene que dejar `node --test` en verde.
 
 ## Forma de trabajo
 
