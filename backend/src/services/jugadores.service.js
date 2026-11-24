@@ -4,6 +4,7 @@
 const MAX_NOMBRE = 30;
 const MAX_APODO = 20;
 const COLOR_POR_DEFECTO = '#888888';
+const COLOR_VALIDO = /^#[0-9a-fA-F]{6}$/; // el color se usa en un atributo style: solo #rrggbb
 
 const fallo = (motivo, errores) => ({ ok: false, motivo, errores });
 const noExiste = () => fallo('no_encontrado', ['No existe ese jugador.']);
@@ -17,6 +18,9 @@ function crearJugadoresService({ jugadores, reloj = () => new Date(), generarId 
     if (!datos.nombre) return { datos, errores: ['El nombre es obligatorio.'], motivo: 'invalido' };
     if (datos.nombre.length > MAX_NOMBRE || datos.apodo.length > MAX_APODO) {
       return { datos, errores: [`El nombre admite hasta ${MAX_NOMBRE} caracteres y el apodo hasta ${MAX_APODO}.`], motivo: 'invalido' };
+    }
+    if (!COLOR_VALIDO.test(datos.color)) {
+      return { datos, errores: ['El color tiene que tener el formato #rrggbb (por ejemplo #e10600).'], motivo: 'invalido' };
     }
     const repetido = (await jugadores.listar()).some((j) => j.id !== exceptoId && j.nombre.toLowerCase() === datos.nombre.toLowerCase());
     if (repetido) return { datos, errores: ['Ya existe un jugador con ese nombre.'], motivo: 'duplicado' };

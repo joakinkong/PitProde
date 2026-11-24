@@ -49,7 +49,27 @@ for (const { nombre, abrir } of BASES) {
         assert.equal(r.cuerpo.fechaAlta, ahora.toISOString());
         id = r.cuerpo.id;
       });
-      test('rechaza nombre vacío (422) y nombre repetido sin importar mayúsculas (409)', async () => {
+      test('el color solo admite #rrggbb: no puede colarse CSS en el atributo style', async () => {
+      for (const color of ['red', 'red; background-image:url(https://x.example/p)', '#fff', '#12345g', 'url(x)']) {
+        const r = await pedir('POST', '/api/jugadores', { nombre: 'Color malo', color });
+        assert.equal(r.estado, 422, color);
+        assert.match(r.cuerpo.errores[0], /#rrggbb/);
+      }
+      const bueno = await pedir('POST', '/api/jugadores', { nombre: 'Color bueno', color: '#A1b2C3' });
+      assert.equal(bueno.estado, 201);
+      assert.equal((await pedir('DELETE', `/api/jugadores/${bueno.cuerpo.id}`)).estado, 200);
+    });
+
+    test('importar un archivo con un color inválido se rechaza y no cambia nada', async () => {
+      const archivo = (await pedir('GET', '/api/exportar')).cuerpo;
+      archivo.jugadores.push({ id: 'jx', nombre: 'Trampa', apodo: '', color: 'red; outline:5px solid red', fechaAlta: '2026-01-01T00:00:00Z' });
+      const r = await pedir('POST', '/api/importar', archivo);
+      assert.equal(r.estado, 422);
+      assert.match(r.cuerpo.errores[0], /color inválido/);
+      assert.equal((await pedir('GET', '/api/jugadores')).cuerpo.some((j) => j.id === 'jx'), false);
+    });
+
+    test('rechaza nombre vacío (422) y nombre repetido sin importar mayúsculas (409)', async () => {
         assert.equal((await pedir('POST', '/api/jugadores', { nombre: '  ' })).estado, 422);
         assert.equal((await pedir('POST', '/api/jugadores', { nombre: 'ANA' })).estado, 409);
       });

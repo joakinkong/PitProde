@@ -91,6 +91,8 @@ function crearDatosIniciales() {
 // ---------- Validación de datos importados ----------
 
 const esTexto = (valor) => typeof valor === 'string' && valor.trim() !== '';
+// El color de un jugador se usa dentro de un atributo style: solo se aceptan colores #rrggbb para que no entre CSS ajeno.
+const esColor = (valor) => typeof valor === 'string' && /^#[0-9a-fA-F]{6}$/.test(valor);
 const esFecha = (valor) => esTexto(valor) && !Number.isNaN(Date.parse(valor));
 const idsDe = (lista) => new Set(lista.map((registro) => registro && registro.id));
 
@@ -103,7 +105,9 @@ function errorDePodio(entrada, idsPilotos) {
 
 // Reglas de cada tipo de registro. Devuelven un texto con el problema o '' si está bien.
 function errorDeJugador(j) {
-  return esTexto(j.id) && esTexto(j.nombre) ? '' : 'le falta el id o el nombre';
+  if (!esTexto(j.id) || !esTexto(j.nombre)) return 'le falta el id o el nombre';
+  const sinColor = j.color === undefined || j.color === null || j.color === '';
+  return sinColor || esColor(j.color) ? '' : 'tiene un color inválido (tiene que ser #rrggbb)';
 }
 
 function errorDePiloto(p) {
@@ -168,7 +172,7 @@ function normalizarDatos(objeto) {
   const datos = {
     jugadores: objeto.jugadores.map((j) => ({
       id: j.id, nombre: j.nombre.trim(), apodo: esTexto(j.apodo) ? j.apodo.trim() : '',
-      color: esTexto(j.color) ? j.color : '#888888', fechaAlta: esFecha(j.fechaAlta) ? j.fechaAlta : ahora,
+      color: esColor(j.color) ? j.color : '#888888', fechaAlta: esFecha(j.fechaAlta) ? j.fechaAlta : ahora,
     })),
     pilotos: objeto.pilotos.map((p) => ({
       id: p.id, nombre: p.nombre.trim(), equipo: p.equipo.trim(), numero: p.numero, activo: p.activo,
