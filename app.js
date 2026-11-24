@@ -6,7 +6,7 @@
 const NOMBRES_ESTADO = { proximo: 'Próximo', cerrado: 'Cerrado', finalizado: 'Finalizado' };
 const PESTANAS = [
   ['tabla', 'Tabla'], ['pronosticos', 'Pronósticos'], ['calendario', 'Calendario'],
-  ['jugadores', 'Jugadores'], ['pilotos', 'Pilotos'], ['datos', 'Datos'],
+  ['jugadores', 'Jugadores'], ['pilotos', 'Pilotos'], ['datos', 'Datos'], ['acceso', 'Organizador'],
 ];
 const PRONOSTICO_VACIO = { jugadorId: '', gpId: '', p1: '', p2: '', p3: '', pole: '' };
 
@@ -15,6 +15,7 @@ const estado = {
   datos: { jugadores: [], pilotos: [], grandesPremios: [], pronosticos: [] },
   tabla: [], // tabla de posiciones calculada por el servidor
   conectado: true,
+  acceso: { requerido: false, autenticado: true }, // si la API pide contraseña y si ya se ingresó
   pestana: 'tabla',
   editando: { jugadores: null, pilotos: null, grandesPremios: null }, // id del registro en edición
   resultadoGpId: null, // GP al que se le está cargando el resultado
@@ -149,6 +150,20 @@ async function recargar() {
   estado.conectado = true;
   return true;
 }
+
+// Pregunta al servidor si pide contraseña de organizador y si el token guardado todavía sirve.
+async function cargarAcceso() {
+  const respuesta = await API.pedir('GET', '/acceso');
+  if (respuesta.ok) estado.acceso = respuesta.datos;
+}
+
+// Si el servidor dice que falta ingresar o venció la sesión: se olvida el token y se lleva al organizador a ingresar.
+API.alNoAutorizado = () => {
+  API.borrarToken();
+  estado.acceso = { requerido: true, autenticado: false };
+  avisar('Tenés que ingresar como organizador para hacer cambios.', 'error');
+  cambiarPestana('acceso');
+};
 
 // Manda un cambio al servidor y, si salió bien, recarga los datos. Devuelve la respuesta o null si falló:
 // los errores se muestran en "caja" (la del formulario) o, si no hay, como aviso arriba.
@@ -694,6 +709,47 @@ function vistaDatos() {
   );
 }
 
+// ---------- Acceso del organizador ----------
+
+// Pantalla para ingresar con la contraseña del organizador (o salir). Ver la tabla y los pronósticos no la necesita.
+function vistaAcceso() {
+  const { requerido, autenticado } = estado.acceso;
+  if (!requerido) {
+    return el('section', {}, el('h2', { text: 'Organizador' }),
+      el('div', { class: 'tarjeta' }, el('p', { text: 'Esta instalación no pide contraseña: se puede cargar y cambiar todo directamente.' })));
+  }
+  if (autenticado) {
+    return el('section', {}, el('h2', { text: 'Organizador' }),
+      el('div', { class: 'tarjeta' },
+        el('p', { text: 'Ingresaste como organizador: podés cargar y cambiar datos. La sesión dura 12 horas.' }),
+        el('div', { class: 'acciones' }, boton('Salir', () => {
+          API.borrarToken();
+          estado.acceso = { requerido: true, autenticado: false };
+          render();
+          avisar('Saliste del modo organizador.');
+        }))));
+  }
+  const caja = crearCajaErrores();
+  const clave = el('input', { type: 'password', autocomplete: 'current-password', 'aria-label': 'Contraseña del organizador' });
+  const ingresar = async (e) => {
+    e.preventDefault();
+    const respuesta = await API.pedir('POST', '/acceso', { clave: clave.value });
+    if (!respuesta.ok) {
+      pintarErrores(caja, respuesta.errores);
+      return;
+    }
+    API.guardarToken(respuesta.datos.token);
+    estado.acceso = { requerido: true, autenticado: true };
+    cambiarPestana('tabla');
+    avisar('Ingresaste como organizador.');
+  };
+  return el('section', {}, el('h2', { text: 'Organizador' }),
+    el('form', { class: 'tarjeta', novalidate: true, onsubmit: ingresar },
+      el('p', { class: 'nota', text: 'Ver la tabla y los pronósticos es libre. Para cargar o cambiar datos hace falta la contraseña del organizador.' }),
+      crearCampo('Contraseña', clave), caja,
+      el('div', { class: 'acciones' }, el('button', { type: 'submit', class: 'btn btn-primario', text: 'Ingresar' }))));
+}
+
 // ---------- Pantalla principal ----------
 
 const VISTAS = {
@@ -703,6 +759,7 @@ const VISTAS = {
   jugadores: () => el('section', {}, el('h2', { text: 'Jugadores' }), vistaEntidad(ENTIDADES.jugadores)),
   pilotos: () => el('section', {}, el('h2', { text: 'Pilotos' }), vistaEntidad(ENTIDADES.pilotos)),
   datos: vistaDatos,
+  acceso: vistaAcceso,
 };
 
 function cambiarPestana(clave) {
@@ -726,6 +783,7 @@ async function iniciar() {
     el('button', { type: 'button', class: 'pestana', 'data-pestana': clave, text: texto, onclick: () => cambiarPestana(clave) })
   )));
   render();
+  await cargarAcceso();
   if (await recargar()) render();
 }
 

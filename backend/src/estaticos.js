@@ -12,6 +12,7 @@ const ARCHIVOS = {
   '/styles.css': ['styles.css', 'text/css; charset=utf-8'],
   '/app.js': ['app.js', 'text/javascript; charset=utf-8'],
   '/api.js': ['api.js', 'text/javascript; charset=utf-8'],
+  '/config.js': ['config.js', 'text/javascript; charset=utf-8'],
   '/scoring.js': ['scoring.js', 'text/javascript; charset=utf-8'],
   '/storage.js': ['storage.js', 'text/javascript; charset=utf-8'],
 };
