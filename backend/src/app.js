@@ -10,6 +10,7 @@ const { crearPronosticosService } = require('./services/pronosticos.service.js')
 const { crearPronosticosController } = require('./controllers/pronosticos.controller.js');
 
 const LIMITE_CUERPO_BYTES = 10 * 1024; // un pronóstico pesa menos de 1 KB
+const LIMITE_DESCARTE_BYTES = 1024 * 1024; // lo máximo que se sigue descartando después de pasarse del límite
 
 // Tabla de rutas: [método, patrón, nombre del handler del controller].
 function crearRutas(controller) {
@@ -29,8 +30,11 @@ function leerCuerpo(req) {
     req.on('data', (parte) => {
       bytes += parte.length;
       if (bytes > LIMITE_CUERPO_BYTES) {
-        resolve({ demasiadoGrande: true }); // el que llama responde 413 y recién ahí corta la conexión
+        // Se responde 413 enseguida, pero se sigue descartando lo que llega: cortar mientras el cliente
+        // todavía escribe le rompe la conexión antes de que lea la respuesta. Pasado el tope de descarte, se corta igual.
         partes.length = 0;
+        resolve({ demasiadoGrande: true });
+        if (bytes > LIMITE_DESCARTE_BYTES) req.destroy();
         return;
       }
       partes.push(parte);
@@ -69,10 +73,7 @@ function crearApp(db, { reloj = () => new Date() } = {}) {
       let body;
       if (req.method === 'POST' || req.method === 'PUT') {
         const cuerpo = await leerCuerpo(req);
-        if (cuerpo.demasiadoGrande) {
-          res.once('finish', () => req.destroy()); // no seguir recibiendo el resto del cuerpo
-          return responder(res, 413, { errores: ['El cuerpo es demasiado grande.'] });
-        }
+        if (cuerpo.demasiadoGrande) return responder(res, 413, { errores: ['El cuerpo es demasiado grande.'] });
         try { body = JSON.parse(cuerpo.texto); } catch (error) {
           return responder(res, 400, { errores: ['El cuerpo no es un JSON válido.'] });
         }

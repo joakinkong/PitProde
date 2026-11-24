@@ -130,13 +130,13 @@ Límites conocidos de esta primera versión, declarados a propósito: no hay aut
 
 ## 8. Evidencia de que funciona
 
-- **Tests automáticos:** 26 pruebas nuevas del backend (13 del service con base en memoria y reloj controlado, 13 de punta a punta contra un servidor HTTP real). Con las 20 que ya existían del puntaje, `node --test` da 46 de 46. Salida completa en `tests-salida.txt`.
+- **Tests automáticos:** 28 pruebas nuevas del backend (15 del service con base en memoria y reloj controlado, 13 de punta a punta contra un servidor HTTP real). Con las 18 que ya existían del puntaje, `node --test` da 46 de 46. Salida completa en `tests-salida.txt`.
 - **Corrida a mano contra el servidor real** (`node backend/server.js`, SQLite en archivo, hora real del servidor): `evidencia.txt` tiene las nueve peticiones con su respuesta. Lo que muestran:
   - Crear un pronóstico para un GP que no largó devuelve `201` y los puntos en `null`.
   - Repetir jugador y GP devuelve `409`; un podio con piloto repetido, `422`.
   - **Un pronóstico para un GP que ya largó devuelve `422` aunque el cliente mande una `fechaCarga` vieja:** la hora que cuenta es la del servidor. Esto resuelve el problema 1 del análisis.
   - Editar y listar funcionan; un filtro con `' OR 1=1 --` devuelve una lista vacía (consultas con parámetros); un JSON roto devuelve `400`.
-- **Un bug encontrado por los tests:** al pasarse del límite de tamaño del cuerpo, el servidor cortaba la conexión antes de responder y el cliente veía un error de socket en vez de un `413`. Se corrigió respondiendo primero y cortando después.
+- **Un bug encontrado por los tests:** al pasarse del límite de tamaño del cuerpo, el servidor cortaba la conexión mientras el cliente todavía estaba escribiendo y el cliente veía un error de socket en vez de un `413`. La primera corrección (responder y recién después cortar) no alcanzó: el test seguía fallando de vez en cuando. La definitiva fue responder `413` enseguida y seguir descartando el cuerpo que llega, con un tope de 1 MB. Después de eso, 0 fallas en 230 corridas seguidas y en 80 corridas en paralelo; una corrida de 40 seguidas hecha justo antes del último ajuste había fallado una vez y no pude reproducirlo después, así que no puedo asegurar que la carrera esté 100 % descartada.
 
 Cómo repetirlo:
 
