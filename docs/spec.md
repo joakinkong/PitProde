@@ -186,6 +186,11 @@ Como **visitante** quiero abrir un link y usar la app sin instalar nada.
 - **Dado** que el servidor está dormido, **cuando** la abro, **entonces** la primera carga puede tardar y, si no logra conectarse, se muestra un mensaje que lo explica.
 - **Dado** otro sitio web, **cuando** intenta leer la API desde el navegador, **entonces** el navegador lo bloquea (RN30).
 
+### HU17 — Publicar sin dejar la app abierta por error
+Como **organizador** quiero que el servidor se niegue a arrancar mal configurado, para no publicar sin protección.
+- **Dado** que el servidor va a escuchar fuera de mi máquina (`HOST` distinto de local) y no hay `ORGANIZER_PASSWORD`, **cuando** arranca, **entonces** se detiene con un mensaje que dice qué variable falta (RN29).
+- **Dado** que la contraseña tiene menos de 8 caracteres, **cuando** arranca, **entonces** se detiene con un mensaje (RN27).
+
 ## 6. Casos borde
 
 | Caso | Qué pasa |
